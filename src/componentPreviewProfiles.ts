@@ -59,7 +59,7 @@ export type PreviewSeries = {
   }[];
   availability?: { label: string; cells: number[] }[];
   sankey?: {
-    nodes: { id: string; label: string; value: number; category?: string }[];
+    nodes: { id: string; label: string; value: number; category?: string; stage?: number }[];
     links: { source: string; target: string; value: number }[];
   };
 };

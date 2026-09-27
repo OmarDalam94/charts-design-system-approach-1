@@ -1392,16 +1392,16 @@ function Sankey({ cfg, minimal, compact, series, decorate, hover, setHover, onMa
   const box = plotBox(cfg, !!decorate, 0, 0, metrics);
   const fallback = {
     nodes: [
-      { id: "source:A", label: "A", value: 62, category: "Source" },
-      { id: "source:B", label: "B", value: 38, category: "Source" },
-      { id: "target:C", label: "C", value: 45, category: "Target" },
-      { id: "target:D", label: "D", value: 55, category: "Target" },
+      { id: "stage:0:A", label: "A", value: 62, category: "Source", stage: 0 },
+      { id: "stage:0:B", label: "B", value: 38, category: "Source", stage: 0 },
+      { id: "stage:1:C", label: "C", value: 45, category: "Target", stage: 1 },
+      { id: "stage:1:D", label: "D", value: 55, category: "Target", stage: 1 },
     ],
     links: [
-      { source: "source:A", target: "target:C", value: 36 },
-      { source: "source:A", target: "target:D", value: 26 },
-      { source: "source:B", target: "target:C", value: 9 },
-      { source: "source:B", target: "target:D", value: 29 },
+      { source: "stage:0:A", target: "stage:1:C", value: 36 },
+      { source: "stage:0:A", target: "stage:1:D", value: 26 },
+      { source: "stage:0:B", target: "stage:1:C", value: 9 },
+      { source: "stage:0:B", target: "stage:1:D", value: 29 },
     ],
   };
   const graph = series?.sankey?.nodes.length ? series.sankey : fallback;
@@ -1422,10 +1422,10 @@ function Sankey({ cfg, minimal, compact, series, decorate, hover, setHover, onMa
   const labelRoom = showNodeText ? Math.min(58, box.width * 0.21) : 0;
   const sourceX = box.left + labelRoom;
   const targetX = box.right - labelRoom - nodeWidth;
-  const sourceIds = new Set(graph.links.map((link) => link.source));
-  const targetIds = new Set(graph.links.map((link) => link.target));
-  const sourceNodes = graph.nodes.filter((node) => sourceIds.has(node.id));
-  const targetNodes = graph.nodes.filter((node) => targetIds.has(node.id));
+  const stageValues = [...new Set(graph.nodes.map((node) => node.stage ?? 0))].sort((a, b) => a - b);
+  const columns = stageValues.map((stage) =>
+    graph.nodes.filter((node) => (node.stage ?? 0) === stage),
+  );
 
   type SankeyNode = (typeof graph.nodes)[number];
   type PositionedNode = SankeyNode & { x: number; y: number; height: number; color: string };
@@ -1458,10 +1458,17 @@ function Sankey({ cfg, minimal, compact, series, decorate, hover, setHover, onMa
     });
   };
 
-  placeColumn(sourceNodes, sourceX, 0);
-  placeColumn(targetNodes, targetX, sourceNodes.length);
+  let colorOffset = 0;
+  columns.forEach((nodes, columnIndex) => {
+    const x =
+      columns.length <= 1
+        ? sourceX
+        : sourceX + (columnIndex / (columns.length - 1)) * (targetX - sourceX);
+    placeColumn(nodes, x, colorOffset);
+    colorOffset += nodes.length;
+  });
   const bend = Math.max(0, Math.min(1, curvature));
-  const legendItems = sourceNodes.map((node) => ({
+  const legendItems = (columns[0] ?? []).map((node) => ({
     label: node.label,
     color: positioned.get(node.id)?.color ?? BRAND,
     value: node.value,
@@ -1496,7 +1503,11 @@ function Sankey({ cfg, minimal, compact, series, decorate, hover, setHover, onMa
         );
       })}
       {[...positioned.values()].map((node) => {
-        const isSource = sourceIds.has(node.id);
+        const columnIndex = stageValues.indexOf(node.stage ?? 0);
+        const isFirstStage = columnIndex === 0;
+        const isLastStage = columnIndex === columns.length - 1;
+        const compactMiddleLabel = columns.length > 4 && !isFirstStage && !isLastStage;
+        const maxLabelLength = compactMiddleLabel ? 4 : 8;
         return (
           <g key={node.id}>
             <rect
@@ -1511,16 +1522,22 @@ function Sankey({ cfg, minimal, compact, series, decorate, hover, setHover, onMa
             />
             {showNodeText && (
               <text
-                x={isSource ? node.x - 5 : node.x + nodeWidth + 5}
+                x={
+                  compactMiddleLabel
+                    ? node.x + nodeWidth / 2
+                    : isFirstStage
+                      ? node.x - 5
+                      : node.x + nodeWidth + 5
+                }
                 y={node.y + node.height / 2 + 3}
-                fill={INK}
-                fontSize={FS_TICK}
+                fill={compactMiddleLabel ? INK_STRONG : INK}
+                fontSize={compactMiddleLabel ? 7 : FS_TICK}
                 fontWeight="500"
-                textAnchor={isSource ? "end" : "start"}
+                textAnchor={compactMiddleLabel ? "middle" : isFirstStage ? "end" : "start"}
               >
                 {showLabels
-                  ? node.label.length > 8
-                    ? `${node.label.slice(0, 7)}…`
+                  ? node.label.length > maxLabelLength
+                    ? `${node.label.slice(0, maxLabelLength - 1)}…`
                     : node.label
                   : ""}
                 {showLabels && showValues ? " · " : ""}

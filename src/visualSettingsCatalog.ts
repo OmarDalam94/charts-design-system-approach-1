@@ -272,7 +272,36 @@ const FIELDS: FieldDef[] = [
   f("Value", "field", "Mapping", ["Pie/Donut", "Gauge", "Availability", "KPI Card", "KPI Grid"], {
     required: true,
   }),
+  f("Number of stages", "dropdown", "Mapping", ["Sankey"], {
+    desc: "Choose between 2 and 8 Sankey stages.",
+    values: ["2", "3", "4", "5", "6", "7", "8"],
+    defaultValue: "2",
+  }),
   f("Source", "field", "Mapping", ["Sankey"], { required: true }),
+  f("Stage 2", "field", "Mapping", ["Sankey"], {
+    required: true,
+    visibleWhen: { group: "Mapping", name: "Number of stages", is: ["3", "4", "5", "6", "7", "8"] },
+  }),
+  f("Stage 3", "field", "Mapping", ["Sankey"], {
+    required: true,
+    visibleWhen: { group: "Mapping", name: "Number of stages", is: ["4", "5", "6", "7", "8"] },
+  }),
+  f("Stage 4", "field", "Mapping", ["Sankey"], {
+    required: true,
+    visibleWhen: { group: "Mapping", name: "Number of stages", is: ["5", "6", "7", "8"] },
+  }),
+  f("Stage 5", "field", "Mapping", ["Sankey"], {
+    required: true,
+    visibleWhen: { group: "Mapping", name: "Number of stages", is: ["6", "7", "8"] },
+  }),
+  f("Stage 6", "field", "Mapping", ["Sankey"], {
+    required: true,
+    visibleWhen: { group: "Mapping", name: "Number of stages", is: ["7", "8"] },
+  }),
+  f("Stage 7", "field", "Mapping", ["Sankey"], {
+    required: true,
+    visibleWhen: { group: "Mapping", name: "Number of stages", is: "8" },
+  }),
   f("Target", "field", "Mapping", ["Sankey"], { required: true }),
   f("Value", "field", "Mapping", ["Sankey"], { required: true }),
   f("Unit", "field", "Mapping", ["Gauge", "KPI Card", "KPI Grid"]),
@@ -475,15 +504,18 @@ const FIELDS: FieldDef[] = [
   /* ---- Sankey ---- */
   f("Node width", "slider", "Sankey", ["Sankey"], {
     desc: "6–30 px. Default 14.",
+    advanced: true,
   }),
   f("Node gap", "slider", "Sankey", ["Sankey"], {
     desc: "4–32 px. Default 12.",
+    advanced: true,
   }),
   f("Link opacity", "slider", "Sankey", ["Sankey"], {
     desc: "10–100%. Default 55.",
   }),
   f("Link curvature", "slider", "Sankey", ["Sankey"], {
     desc: "0–100%. Default 55.",
+    advanced: true,
   }),
   f("Show node labels", "toggle", "Sankey", ["Sankey"]),
 
@@ -1395,7 +1427,12 @@ export function fieldsForVisual(visualId: string): Opt[] {
   if (!notionType) return [];
   return FIELDS.filter((def) => expandTypes(def.types).has(notionType))
     .map((def) => toOpt(def, notionType))
-    .sort((a, b) => levelRank(a.level) - levelRank(b.level));
+    .sort((a, b) => {
+      const aStageCount = a.group === "Mapping" && a.name === "Number of stages";
+      const bStageCount = b.group === "Mapping" && b.name === "Number of stages";
+      if (aStageCount !== bStageCount) return aStageCount ? -1 : 1;
+      return levelRank(a.level) - levelRank(b.level);
+    });
 }
 
 export function subCategoriesForVisual(visualId: string): string[] {

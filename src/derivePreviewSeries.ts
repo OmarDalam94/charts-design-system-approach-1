@@ -402,65 +402,102 @@ export function derivePreviewSeries({
   }
 
   if (chartId === "sankey") {
+    const stageCount = Math.max(
+      2,
+      Math.min(8, Number(cfgStr(config, "Mapping", "Number of stages")) || 2),
+    );
     const sourceCol = mapped(config, "Source", "origin");
     const targetCol = mapped(config, "Target", "destination");
     const valueCol = mapped(config, "Value", "value");
-    const pairRows = new Map<string, { source: string; target: string; rows: MockRow[] }>();
+    const intermediateDefaults = ["region", "category", "status", "series", "type", "direction"];
+    const stageCols = [
+      sourceCol,
+      ...Array.from({ length: stageCount - 2 }, (_, index) =>
+        mapped(config, `Stage ${index + 2}`, intermediateDefaults[index] ?? "category"),
+      ),
+      targetCol,
+    ];
+    const pairRows = new Map<
+      string,
+      { source: string; target: string; sourceStage: number; targetStage: number; rows: MockRow[] }
+    >();
 
     rows.forEach((row) => {
-      const source = strCell(row, sourceCol);
-      const target = strCell(row, targetCol);
-      if (!source || !target) return;
-      const key = `${source}\u0000${target}`;
-      const pair = pairRows.get(key);
-      if (pair) pair.rows.push(row);
-      else pairRows.set(key, { source, target, rows: [row] });
+      stageCols.forEach((column, sourceStage) => {
+        if (sourceStage >= stageCols.length - 1) return;
+        const targetStage = sourceStage + 1;
+        const source = strCell(row, column);
+        const target = strCell(row, stageCols[targetStage]);
+        if (!source || !target) return;
+        const key = `${sourceStage}\u0000${source}\u0000${target}`;
+        const pair = pairRows.get(key);
+        if (pair) pair.rows.push(row);
+        else pairRows.set(key, { source, target, sourceStage, targetStage, rows: [row] });
+      });
     });
 
-    const links = [...pairRows.values()].map((pair) => ({
-      source: `source:${pair.source}`,
-      target: `target:${pair.target}`,
-      value: Math.max(
-        0,
-        aggregate(
-          pair.rows.map((row) => numCell(row, valueCol)),
-          agg.startsWith("None") ? "Sum" : agg,
+    const pairs = [...pairRows.values()];
+    const links = pairs
+      .map((pair) => ({
+        source: `stage:${pair.sourceStage}:${pair.source}`,
+        target: `stage:${pair.targetStage}:${pair.target}`,
+        value: Math.max(
+          0,
+          aggregate(
+            pair.rows.map((row) => numCell(row, valueCol)),
+            agg.startsWith("None") ? "Sum" : agg,
+          ),
         ),
-      ),
-    })).filter((link) => link.value > 0);
+      }))
+      .filter((link) => link.value > 0);
 
-    const sourceTotals = new Map<string, number>();
-    const targetTotals = new Map<string, number>();
+    const nodeFlows = new Map<
+      string,
+      { id: string; label: string; stage: number; incoming: number; outgoing: number }
+    >();
     links.forEach((link) => {
-      sourceTotals.set(link.source, (sourceTotals.get(link.source) ?? 0) + link.value);
-      targetTotals.set(link.target, (targetTotals.get(link.target) ?? 0) + link.value);
+      const sourceParts = link.source.split(":");
+      const targetParts = link.target.split(":");
+      const sourceStage = Number(sourceParts[1]);
+      const targetStage = Number(targetParts[1]);
+      const source = nodeFlows.get(link.source) ?? {
+        id: link.source,
+        label: sourceParts.slice(2).join(":"),
+        stage: sourceStage,
+        incoming: 0,
+        outgoing: 0,
+      };
+      const target = nodeFlows.get(link.target) ?? {
+        id: link.target,
+        label: targetParts.slice(2).join(":"),
+        stage: targetStage,
+        incoming: 0,
+        outgoing: 0,
+      };
+      source.outgoing += link.value;
+      target.incoming += link.value;
+      nodeFlows.set(link.source, source);
+      nodeFlows.set(link.target, target);
     });
 
-    const nodes = [
-      ...[...sourceTotals].map(([id, value]) => ({
-        id,
-        label: id.slice("source:".length),
-        value,
-        category: "Source",
-      })),
-      ...[...targetTotals].map(([id, value]) => ({
-        id,
-        label: id.slice("target:".length),
-        value,
-        category: "Target",
-      })),
-    ];
+    const nodes = [...nodeFlows.values()].map((node) => ({
+      id: node.id,
+      label: node.label,
+      stage: node.stage,
+      value: Math.max(node.incoming, node.outgoing),
+      category: columnLabel(stageCols[node.stage], dataset),
+    }));
 
     out.sankey = { nodes, links };
     out.labels = nodes.map((node) => node.label);
     out.values = nodes.map((node) => node.value);
-    out.legend = `${columnLabel(sourceCol, dataset)} → ${columnLabel(targetCol, dataset)}`;
-    out.markTips = [...pairRows.values()]
+    out.legend = stageCols.map((column) => columnLabel(column, dataset)).join(" → ");
+    out.markTips = pairs
       .map((pair) => {
         const link = links.find(
           (candidate) =>
-            candidate.source === `source:${pair.source}` &&
-            candidate.target === `target:${pair.target}`,
+            candidate.source === `stage:${pair.sourceStage}:${pair.source}` &&
+            candidate.target === `stage:${pair.targetStage}:${pair.target}`,
         );
         if (!link) return null;
         return {

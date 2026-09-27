@@ -211,7 +211,16 @@ function isOptSatisfied(o: Opt, getVal: (o: Opt) => unknown): boolean {
 }
 
 function sectionHasErrors(fields: Opt[], getVal: (o: Opt) => unknown): boolean {
-  return fields.some((o) => o.level === "required" && !isOptSatisfied(o, getVal));
+  const getValByKey = (group: string, name: string) => {
+    const dependency = fields.find((field) => field.group === group && field.name === name);
+    return dependency ? getVal(dependency) : "";
+  };
+  return fields.some(
+    (o) =>
+      isFieldVisible(o, getValByKey) &&
+      o.level === "required" &&
+      !isOptSatisfied(o, getVal),
+  );
 }
 
 type WizardStepState = "disabled" | "active" | "selected";
@@ -1773,9 +1782,17 @@ function fieldClusterNodes(
       </RevealPanel>
     ));
     if (!cluster.parent) {
+      const visibleReveals = cluster.reveals.filter((group) =>
+        isFieldVisible(group.fields[0], getValByKey),
+      );
+      if (!visibleReveals.length) continue;
       nodes.push(
         <div className="ia-standalone-reveal" key={cluster.reveals[0]?.key ?? i}>
-          {reveals}
+          {visibleReveals.map((group) => (
+            <RevealPanel key={group.key} open>
+              {renderFieldRows(pairAxes(group.fields), getVal, setVal)}
+            </RevealPanel>
+          ))}
         </div>,
       );
       continue;
