@@ -60,7 +60,7 @@ const opacityPalette = (baseColor: string) =>
 
 const LLUX_CATEGORICAL = [
   "#6a9ef0",
-  "#cac5f6",
+  "#bdb6f4",
   "#26ada0",
   "#7ad488",
   "#fceed6",
