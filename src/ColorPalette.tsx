@@ -72,11 +72,11 @@ const LLUX_CATEGORICAL = [
 ];
 
 const PRESETS: PalettePreset[] = [
-  { name: "Blue", type: "Sequential", sequentialMode: "Shades", colors: ["#f7f9ff", "#d8e6fd", "#a8c9fa", "#6a9ef3", "#4f86ea", "#356eea", "#2b61f5"] },
-  { name: "Purple", type: "Sequential", sequentialMode: "Shades", colors: ["#f6f2ff", "#e9ddff", "#d6c2fb", "#b899f5", "#9673e8", "#764fd8", "#5a2fc7"] },
-  { name: "Teal", type: "Sequential", sequentialMode: "Shades", colors: ["#eefcfa", "#d5f8f2", "#b8f0e6", "#94e8dc", "#45cdb9", "#23b899", "#159a7d"] },
-  { name: "Red", type: "Sequential", sequentialMode: "Shades", colors: ["#fff7f7", "#ffe7e7", "#ffd5d5", "#ffbbbb", "#ff9292", "#f56b6b", "#c62828"] },
-  { name: "Gold", type: "Sequential", sequentialMode: "Shades", colors: ["#fffbeb", "#fef7d6", "#fef3c7", "#fde68a", "#fcd34d", "#fbbf24", "#f59e0b"] },
+  { name: "Blue → White", type: "Sequential", sequentialMode: "Shades", colors: ["#2b61f5", "#356eea", "#4f86ea", "#6a9ef3", "#a8c9fa", "#d8e6fd", "#f7f9ff"] },
+  { name: "Purple → White", type: "Sequential", sequentialMode: "Shades", colors: ["#5a2fc7", "#764fd8", "#9673e8", "#b899f5", "#d6c2fb", "#e9ddff", "#f6f2ff"] },
+  { name: "Teal → White", type: "Sequential", sequentialMode: "Shades", colors: ["#159a7d", "#23b899", "#45cdb9", "#94e8dc", "#b8f0e6", "#d5f8f2", "#eefcfa"] },
+  { name: "Red → White", type: "Sequential", sequentialMode: "Shades", colors: ["#c62828", "#f56b6b", "#ff9292", "#ffbbbb", "#ffd5d5", "#ffe7e7", "#fff7f7"] },
+  { name: "Gold → White", type: "Sequential", sequentialMode: "Shades", colors: ["#f59e0b", "#fbbf24", "#fcd34d", "#fde68a", "#fef3c7", "#fef7d6", "#fffbeb"] },
   // Every categorical palette, including its last-to-first wrap, is validated
   // at ΔE2000 >= 20.2 and WCAG contrast >= 1.51.
   { name: "Default", type: "Categorical", colors: LLUX_CATEGORICAL },
@@ -84,18 +84,18 @@ const PRESETS: PalettePreset[] = [
   { name: "Ember", type: "Categorical", colors: ["#823864", "#f06840", "#aa4073", "#f6bcc3", "#6f67be", "#604313", "#47a155", "#25766e", "#ecd09f", "#7b6fe8"] },
   { name: "Earth", type: "Categorical", colors: ["#cac5f6", "#47a155", "#38345f", "#90651d", "#572642", "#25766e", "#ed7986", "#a66e0d", "#a6c5f6", "#aa4073"] },
   { name: "Spectrum", type: "Categorical", colors: ["#47a155", "#f6bcc3", "#c08626", "#0f4540", "#7b6fe8", "#65d0c6", "#ae4b85", "#c3d8f9", "#dd73a6", "#533706"] },
-  { name: "Red to Blue", type: "Diverging", colors: ["#9f1d1d", "#df3f3f", "#f7a0a0", "#f3f4f6", "#cce4fb", "#68b1ee", "#1565c0"] },
-  { name: "Purple to Teal", type: "Diverging", colors: ["#6b21a8", "#9333c9", "#c084fc", "#f3e8ff", "#99f6e4", "#2dd4bf", "#0f766e"] },
-  { name: "Purple to Green", type: "Diverging", colors: ["#8e00a8", "#bd00d3", "#ed75e7", "#f7f7f7", "#8bdc84", "#2dbb25", "#18851f"] },
-  { name: "Blue to Lime", type: "Diverging", colors: ["#002cd4", "#245eeb", "#7b79f2", "#f7f7f7", "#e5e676", "#c9ca2d", "#9c9d1c"] },
+  { name: "Red → White → Blue", type: "Diverging", colors: ["#9f1d1d", "#df3f3f", "#f7a0a0", "#f3f4f6", "#cce4fb", "#68b1ee", "#1565c0"] },
+  { name: "Purple → White → Teal", type: "Diverging", colors: ["#6b21a8", "#9333c9", "#c084fc", "#f3e8ff", "#99f6e4", "#2dd4bf", "#0f766e"] },
+  { name: "Purple → White → Green", type: "Diverging", colors: ["#8e00a8", "#bd00d3", "#ed75e7", "#f7f7f7", "#8bdc84", "#2dbb25", "#18851f"] },
+  { name: "Blue → White → Lime", type: "Diverging", colors: ["#002cd4", "#245eeb", "#7b79f2", "#f7f7f7", "#e5e676", "#c9ca2d", "#9c9d1c"] },
 ];
 
 const OPACITY_PRESETS: PalettePreset[] = [
-  { name: "Blue", type: "Sequential", sequentialMode: "Opacity", colors: opacityPalette("#2b61f5") },
-  { name: "Purple", type: "Sequential", sequentialMode: "Opacity", colors: opacityPalette("#5a2fc7") },
-  { name: "Teal", type: "Sequential", sequentialMode: "Opacity", colors: opacityPalette("#159a7d") },
-  { name: "Red", type: "Sequential", sequentialMode: "Opacity", colors: opacityPalette("#c62828") },
-  { name: "Gold", type: "Sequential", sequentialMode: "Opacity", colors: opacityPalette("#f59e0b") },
+  { name: "Blue → Transparent", type: "Sequential", sequentialMode: "Opacity", colors: opacityPalette("#2b61f5") },
+  { name: "Purple → Transparent", type: "Sequential", sequentialMode: "Opacity", colors: opacityPalette("#5a2fc7") },
+  { name: "Teal → Transparent", type: "Sequential", sequentialMode: "Opacity", colors: opacityPalette("#159a7d") },
+  { name: "Red → Transparent", type: "Sequential", sequentialMode: "Opacity", colors: opacityPalette("#c62828") },
+  { name: "Gold → Transparent", type: "Sequential", sequentialMode: "Opacity", colors: opacityPalette("#f59e0b") },
 ];
 
 function sequentialModeForColors(colors: string[]): SequentialMode {
@@ -269,8 +269,33 @@ function spreadStops(
   });
 }
 
-function gradientStops(colors: string[], min = 0, max = 100, distribution = "Linear"): Stop[] {
-  return spreadStops(colors, min, max, 2, distribution);
+function gradientStops(
+  colors: string[],
+  min = 0,
+  max = 100,
+  distribution = "Linear",
+  count = 2,
+): Stop[] {
+  const ramp = colors.length ? colors : DEFAULT_COLOR_MODE.colors;
+  const stopCount = Math.max(2, count);
+  const sequentialColors =
+    stopCount === 2
+      ? [ramp[0], ramp[ramp.length - 1]]
+      : [
+          ramp[0],
+          ...Array.from(
+            { length: stopCount - 2 },
+            (_, index) => ramp[(index + 1) % ramp.length],
+          ),
+          ramp[ramp.length - 1],
+        ];
+  return spreadStops(
+    sequentialColors,
+    min,
+    max,
+    stopCount,
+    distribution,
+  );
 }
 
 function toUiStops(list: ColorStop[]): Stop[] {
@@ -283,12 +308,8 @@ function persistable(list: Stop[]): ColorStop[] {
 
 function stepStops(colors: string[], min = 0, max = 100): Stop[] {
   const ramp = colors.length ? colors : DEFAULT_COLOR_MODE.colors;
-  const secondColorIndex = Math.min(
-    ramp.length - 1,
-    Math.max(1, Math.round((ramp.length - 1) / 3)),
-  );
   const stops = spreadStops(
-    [ramp[0], ramp[secondColorIndex]],
+    [ramp[0], ramp[Math.min(1, ramp.length - 1)]],
     min,
     max,
     2,
@@ -758,11 +779,40 @@ export function DirectColorPicker({
 }
 
 function PaletteSwatches({ colors }: { colors: string[] }) {
+  const showsTransparency = colors.some((color) =>
+    /^#[0-9a-f]{8}$/i.test(color),
+  );
+
   return (
-    <span className="cp-picker-dots">
-      {colors.map((c, index) => (
-        <span key={`${c}-${index}`} className="cp-picker-dot" style={{ background: c }} />
-      ))}
+    <span
+      className={
+        "cp-picker-dots" +
+        (showsTransparency ? " cp-picker-dots--transparency" : "")
+      }
+    >
+      {colors.map((c, index) => {
+        const alphaMatch = c.match(/^#[0-9a-f]{6}([0-9a-f]{2})$/i);
+        const isTransparent =
+          alphaMatch !== null && Number.parseInt(alphaMatch[1], 16) < 255;
+
+        return (
+          <span
+            key={`${c}-${index}`}
+            className={
+              "cp-picker-dot" +
+              (isTransparent ? " cp-picker-dot--transparency" : "") +
+              (isTransparent && index % 2 === 0
+                ? " cp-picker-dot--checker-reversed"
+                : "")
+            }
+            style={
+              isTransparent
+                ? ({ "--cp-swatch-color": c } as CSSProperties)
+                : { background: c }
+            }
+          />
+        );
+      })}
     </span>
   );
 }
@@ -1592,7 +1642,7 @@ export default function ColorPalette({
   const previewCategoryLabels = useContext(PaletteCategoriesContext);
   const paletteEdgeCase = useContext(PaletteEdgeCaseContext);
   const [local, setLocal] = useState<ColorModeConfig>(() => asColorMode(value ?? { ...DEFAULT_COLOR_MODE, color }));
-  const config = value ?? local;
+  const config = asColorMode(value ?? local);
   const commit = (patch: Partial<ColorModeConfig>) => {
     const next: ColorModeConfig = { ...config, ...patch };
     if (!value) setLocal(next);
@@ -1661,7 +1711,13 @@ export default function ColorPalette({
     }
     const aligned = Math.abs(lo - domainMin) < 1e-6 && Math.abs(hi - domainMax) < 1e-6;
     if (aligned && !isPlaceholderStops(current)) return;
-    const g = spreadStops(paletteColors, domainMin, domainMax, Math.max(2, gStops.length), config.distribution);
+    const g = gradientStops(
+      paletteColors,
+      domainMin,
+      domainMax,
+      config.distribution,
+      Math.max(2, gStops.length),
+    );
     setGStops(g);
     commit({ stops: persistable(g) });
     // Domain identity only — stop lists are rebuilt here.
@@ -1676,7 +1732,7 @@ export default function ColorPalette({
     setGStops(g);
     setSStops(s);
     const representativeColor =
-      preset.sequentialMode === "Opacity"
+      preset.type === "Sequential"
         ? preset.colors[0]
         : preset.colors[preset.colors.length - 1] ?? config.color;
     commit({
@@ -1763,7 +1819,10 @@ export default function ColorPalette({
           id: nextId(),
           value,
           color:
-            paletteColors[list.length % Math.max(paletteColors.length, 1)] ??
+            paletteColors[
+              (style === "Gradient" ? list.length - 1 : list.length) %
+                Math.max(paletteColors.length, 1)
+            ] ??
             paletteColors[0],
           opacity: 100,
         },

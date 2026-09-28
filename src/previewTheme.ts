@@ -470,9 +470,9 @@ export type ColorModeConfig = {
 };
 
 export const DEFAULT_COLOR_MODE: ColorModeConfig = {
-  paletteName: "Blue",
+  paletteName: "Blue → White",
   paletteFamily: "Sequential",
-  colors: ["#f7f9ff", "#d8e6fd", "#a8c9fa", "#6a9ef3", "#4f86ea", "#356eea", "#2b61f5"],
+  colors: ["#2b61f5", "#356eea", "#4f86ea", "#6a9ef3", "#a8c9fa", "#d8e6fd", "#f7f9ff"],
   style: "Single",
   color: "#2b61f5",
   opacity: 100,
@@ -485,9 +485,9 @@ export const DEFAULT_COLOR_MODE: ColorModeConfig = {
   gradientAxis: "Y",
   gradientReverse: false,
   stops: [
-    { value: 194, color: "#c8dcfc", opacity: 100 },
+    { value: 194, color: "#2b61f5", opacity: 100 },
     { value: 350, color: "#6a9ef3", opacity: 100 },
-    { value: 600, color: "#2b61f5", opacity: 100 },
+    { value: 600, color: "#c8dcfc", opacity: 100 },
   ],
 };
 
@@ -497,10 +497,38 @@ export function asColorMode(v: unknown): ColorModeConfig {
   }
   if (v && typeof v === "object" && !Array.isArray(v)) {
     const o = v as Partial<ColorModeConfig>;
+    const legacyBlueShades =
+      o.paletteName === "Blue" &&
+      o.paletteFamily === "Sequential" &&
+      Array.isArray(o.colors) &&
+      o.colors.every((color) => /^#[0-9a-f]{6}$/i.test(String(color)));
+    const legacyOpacityNames: Record<string, string> = {
+      Blue: "Blue → Transparent",
+      Purple: "Purple → Transparent",
+      Teal: "Teal → Transparent",
+      Red: "Red → Transparent",
+      Gold: "Gold → Transparent",
+    };
+    const legacyOpacityName =
+      o.paletteFamily === "Sequential" &&
+      Array.isArray(o.colors) &&
+      o.colors.some((color) => /^#[0-9a-f]{8}$/i.test(String(color))) &&
+      typeof o.paletteName === "string"
+        ? legacyOpacityNames[o.paletteName]
+        : undefined;
     return {
       ...DEFAULT_COLOR_MODE,
       ...o,
-      colors: Array.isArray(o.colors) && o.colors.length ? o.colors : DEFAULT_COLOR_MODE.colors,
+      paletteName: legacyBlueShades
+        ? DEFAULT_COLOR_MODE.paletteName
+        : legacyOpacityName ??
+          o.paletteName ??
+          DEFAULT_COLOR_MODE.paletteName,
+      colors: legacyBlueShades
+        ? DEFAULT_COLOR_MODE.colors
+        : Array.isArray(o.colors) && o.colors.length
+          ? o.colors
+          : DEFAULT_COLOR_MODE.colors,
       categoryField:
         typeof o.categoryField === "string" && o.categoryField
           ? o.categoryField
@@ -527,7 +555,11 @@ export function asColorMode(v: unknown): ColorModeConfig {
         o.sequentialBasis === "Category" ? "Category" : "Value",
       gradientAxis: o.gradientAxis === "X" ? "X" : "Y",
       gradientReverse: Boolean(o.gradientReverse),
-      stops: Array.isArray(o.stops) && o.stops.length ? o.stops : DEFAULT_COLOR_MODE.stops,
+      stops: legacyBlueShades
+        ? DEFAULT_COLOR_MODE.stops
+        : Array.isArray(o.stops) && o.stops.length
+          ? o.stops
+          : DEFAULT_COLOR_MODE.stops,
     };
   }
   return { ...DEFAULT_COLOR_MODE, stops: DEFAULT_COLOR_MODE.stops.map((s) => ({ ...s })) };
