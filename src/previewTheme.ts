@@ -44,6 +44,23 @@ function hexAlpha(hex: string): number {
     : 1;
 }
 
+export function opacityPercentFromColor(hex: string): number {
+  return Math.round(hexAlpha(hex) * 100);
+}
+
+export function stripHexAlpha(hex: string): string {
+  const normalized = hex.replace("#", "").trim();
+  const rgb = normalized.length >= 6 ? normalized.slice(0, 6) : normalized.padEnd(6, "0").slice(0, 6);
+  return `#${rgb}`;
+}
+
+export function colorWithOpacityPercent(hex: string, opacityPct: number): string {
+  const base = stripHexAlpha(hex);
+  const pct = Math.max(0, Math.min(100, Math.round(opacityPct)));
+  if (pct >= 100) return base;
+  return `${base}${Math.round((pct / 100) * 255).toString(16).padStart(2, "0")}`;
+}
+
 export function mixHex(a: string, b: string, t: number): string {
   const [ar, ag, ab] = hexToRgb(a);
   const [br, bg, bb] = hexToRgb(b);
@@ -566,9 +583,12 @@ export function asColorMode(v: unknown): ColorModeConfig {
 }
 
 export function withOpacity(hex: string, opacityPct: number): string {
-  const op =
-    hexAlpha(hex) * Math.max(0, Math.min(1, opacityPct / 100));
-  if (op >= 0.995) return hex;
+  const embedded = hexAlpha(hex);
+  const requested = Math.max(0, Math.min(1, opacityPct / 100));
+  // A stored 100% means "no extra fade" for older colors whose alpha lives in
+  // the hex. Any explicit slider value replaces that alpha instead of stacking.
+  const op = embedded < 0.995 && requested >= 0.995 ? embedded : requested;
+  if (op >= 0.995) return embedded >= 0.995 ? hex : stripHexAlpha(hex);
   const [r, g, b] = hexToRgb(hex);
   return `rgba(${r}, ${g}, ${b}, ${op.toFixed(3)})`;
 }

@@ -24,8 +24,10 @@ import {
 import {
   DEFAULT_COLOR_MODE,
   asColorMode,
+  colorWithOpacityPercent,
   expandPaletteToCount,
   hexToRgb,
+  opacityPercentFromColor,
   rgbToHex,
   type ColorModeConfig,
   type ColorStop,
@@ -260,11 +262,12 @@ function spreadStops(
   return Array.from({ length: n }, (_, i) => {
     const t = unitAlong(i, n, distribution);
     const colorIndex = Math.round((n === 1 ? 0 : i / (n - 1)) * (ramp.length - 1));
+    const color = ramp[Math.min(colorIndex, ramp.length - 1)];
     return {
       id: nextId(),
       value: niceNum(min + t * span, span),
-      color: ramp[Math.min(colorIndex, ramp.length - 1)],
-      opacity: 100,
+      color,
+      opacity: opacityPercentFromColor(color),
     };
   });
 }
@@ -1079,8 +1082,11 @@ function StopRow({
   onRemove: () => void;
 }) {
   const committedHex = toHex(stop.color).toUpperCase();
+  const embeddedOpacity = opacityPercentFromColor(stop.color);
+  const effectiveOpacity =
+    embeddedOpacity < 100 && stop.opacity >= 100 ? embeddedOpacity : stop.opacity;
   const [hexDraft, setHexDraft] = useState(committedHex);
-  const [opacityDraft, setOpacityDraft] = useState(String(stop.opacity));
+  const [opacityDraft, setOpacityDraft] = useState(String(effectiveOpacity));
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuPos, setMenuPos] = useState({ top: 0, left: 0 });
   const [customPickerOpen, setCustomPickerOpen] = useState(false);
@@ -1095,8 +1101,8 @@ function StopRow({
   }, [committedHex]);
 
   useEffect(() => {
-    setOpacityDraft(String(stop.opacity));
-  }, [stop.opacity]);
+    setOpacityDraft(String(effectiveOpacity));
+  }, [effectiveOpacity]);
 
   const syncMenuPosition = useCallback(() => {
     const el = swatchRef.current;
@@ -1186,8 +1192,21 @@ function StopRow({
     };
   }, [customPickerOpen, syncCustomPickerPosition]);
 
+  const commitOpacity = (opacity: number) => {
+    const nextOpacity = Math.max(0, Math.min(100, Math.round(opacity)));
+    onChange({
+      ...stop,
+      color: colorWithOpacityPercent(stop.color, nextOpacity),
+      opacity: nextOpacity,
+    });
+  };
+
   const pickColor = (next: string) => {
-    onChange({ ...stop, color: next });
+    onChange({
+      ...stop,
+      color: next,
+      opacity: opacityPercentFromColor(next),
+    });
     setMenuOpen(false);
   };
 
@@ -1337,8 +1356,8 @@ function StopRow({
             className="cp-range"
             min={0}
             max={100}
-            value={stop.opacity}
-            onChange={(e) => onChange({ ...stop, opacity: Number(e.target.value) })}
+            value={effectiveOpacity}
+            onChange={(e) => commitOpacity(Number(e.target.value))}
           />
           <label className="cp-pct-input">
             <input
@@ -1354,17 +1373,15 @@ function StopRow({
                 if (draft === "") return;
                 const next = Number(draft);
                 if (!Number.isFinite(next)) return;
-                onChange({ ...stop, opacity: Math.max(0, Math.min(100, next)) });
+                commitOpacity(next);
               }}
               onBlur={() => {
                 const next = Number(opacityDraft);
                 if (!Number.isFinite(next) || opacityDraft === "") {
-                  setOpacityDraft(String(stop.opacity));
+                  setOpacityDraft(String(effectiveOpacity));
                   return;
                 }
-                const clamped = Math.max(0, Math.min(100, next));
-                setOpacityDraft(String(clamped));
-                onChange({ ...stop, opacity: clamped });
+                commitOpacity(next);
               }}
             />
             <span>%</span>
@@ -1824,7 +1841,14 @@ export default function ColorPalette({
                 Math.max(paletteColors.length, 1)
             ] ??
             paletteColors[0],
-          opacity: 100,
+          opacity: opacityPercentFromColor(
+            paletteColors[
+              (style === "Gradient" ? list.length - 1 : list.length) %
+                Math.max(paletteColors.length, 1)
+            ] ??
+              paletteColors[0] ??
+              "",
+          ),
         },
       ];
       if (style === "Gradient") updated = redistributeStops(updated, min, max, distribution);
@@ -1934,8 +1958,13 @@ export default function ColorPalette({
                       id: index,
                       value: index,
                       color: categoryColor,
-                      opacity:
-                        config.categoryOpacities[index] ?? config.opacity,
+                      opacity: (() => {
+                        const stored = config.categoryOpacities[index];
+                        const embedded = opacityPercentFromColor(categoryColor);
+                        return stored == null || (stored >= 100 && embedded < 100)
+                          ? embedded
+                          : stored;
+                      })(),
                     }}
                     colors={paletteColors}
                     usedColors={categoryLabels.flatMap(

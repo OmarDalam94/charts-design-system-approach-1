@@ -11,6 +11,8 @@ import { DirectColorPicker } from "./ColorPalette";
 import { uniqueValues } from "./mockDataset";
 import {
   DEFAULT_COLOR_MODE,
+  colorWithOpacityPercent,
+  opacityPercentFromColor,
   sequentialRamp,
   type ColorModeConfig,
 } from "./previewTheme";
@@ -268,9 +270,14 @@ export default function ColorPickerSettings({
                       <span className="cp-label">{category}</span>
                       <DirectColorPicker
                         value={color}
-                        opacity={
-                          value.categoryOpacities[index] ?? value.opacity
-                        }
+                        opacity={(() => {
+                          const stored = value.categoryOpacities[index];
+                          const embedded = opacityPercentFromColor(color);
+                          return stored == null ||
+                            (stored >= 100 && embedded < 100)
+                            ? embedded
+                            : stored;
+                        })()}
                         onChange={(nextColor) =>
                           onChange({
                             ...value,
@@ -286,7 +293,14 @@ export default function ColorPickerSettings({
                             ...value.categoryOpacities,
                           ];
                           categoryOpacities[index] = opacity;
-                          onChange({ ...value, categoryOpacities });
+                          onChange({
+                            ...value,
+                            categoryOpacities,
+                            categoryColors: {
+                              ...value.categoryColors,
+                              [category]: colorWithOpacityPercent(color, opacity),
+                            },
+                          });
                         }}
                       />
                     </div>
