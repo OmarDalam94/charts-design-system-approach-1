@@ -61,6 +61,31 @@ export function colorWithOpacityPercent(hex: string, opacityPct: number): string
   return `${base}${Math.round((pct / 100) * 255).toString(16).padStart(2, "0")}`;
 }
 
+export function isOpacityPalette(colors: string[]): boolean {
+  return colors.some((color) => /^#[0-9a-f]{8}$/i.test(color));
+}
+
+/** Opacity palettes repeat the base color; only the opacity changes. */
+export function paletteColorAt(
+  colors: string[],
+  index: number,
+): { color: string; opacity: number } {
+  const source = colors.length ? colors : DEFAULT_COLOR_MODE.colors;
+  if (!isOpacityPalette(source)) {
+    const color = source[Math.max(0, index) % source.length];
+    return { color: stripHexAlpha(color), opacity: opacityPercentFromColor(color) };
+  }
+  const base = stripHexAlpha(source[0]);
+  const levels = source.map((color) => opacityPercentFromColor(color));
+  if (index < levels.length) return { color: base, opacity: levels[index] };
+  const previous = levels[levels.length - 2] ?? 100;
+  const step = Math.max(1, previous - levels[levels.length - 1]);
+  return {
+    color: base,
+    opacity: Math.max(0, levels[levels.length - 1] - (index - (levels.length - 1)) * step),
+  };
+}
+
 export function mixHex(a: string, b: string, t: number): string {
   const [ar, ag, ab] = hexToRgb(a);
   const [br, bg, bb] = hexToRgb(b);
@@ -614,6 +639,12 @@ export function expandPaletteToCount(
 ): string[] {
   const source = colors.length ? colors : DEFAULT_COLOR_MODE.colors;
   const targetCount = Math.max(1, Math.round(count));
+  if (isOpacityPalette(source)) {
+    return Array.from({ length: targetCount }, (_, index) => {
+      const assigned = paletteColorAt(source, index);
+      return colorWithOpacityPercent(assigned.color, assigned.opacity);
+    });
+  }
   if (source.length >= targetCount) return [...source];
   if (family !== "Categorical") return fitPaletteToCount(source, targetCount);
 
@@ -671,7 +702,16 @@ export function resolveColorMode(
           ([label]) => label.toLowerCase() === category.toLowerCase(),
         )?.[1]
       : undefined;
-    const colorIndex = categoryIndex % colors.length;
+    const colorIndex = categoryIndex % Math.max(colors.length, 1);
+    if (isOpacityPalette(sourceColors)) {
+      const assigned = paletteColorAt(sourceColors, categoryIndex);
+      const color = directColor ? stripHexAlpha(directColor) : assigned.color;
+      return withOpacity(
+        color,
+        mode.categoryOpacities[categoryIndex] ??
+          (directColor ? opacityPercentFromColor(directColor) : assigned.opacity),
+      );
+    }
     return withOpacity(
       directColor ?? colors[colorIndex] ?? mode.color,
       mode.categoryOpacities[categoryIndex] ?? mode.opacity,

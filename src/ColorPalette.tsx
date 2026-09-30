@@ -24,11 +24,14 @@ import {
 import {
   DEFAULT_COLOR_MODE,
   asColorMode,
-  colorWithOpacityPercent,
   expandPaletteToCount,
   hexToRgb,
+  colorWithOpacityPercent,
   opacityPercentFromColor,
+  paletteColorAt,
   rgbToHex,
+  stripHexAlpha,
+  withOpacity,
   type ColorModeConfig,
   type ColorStop,
   type PaletteFamily,
@@ -262,12 +265,15 @@ function spreadStops(
   return Array.from({ length: n }, (_, i) => {
     const t = unitAlong(i, n, distribution);
     const colorIndex = Math.round((n === 1 ? 0 : i / (n - 1)) * (ramp.length - 1));
-    const color = ramp[Math.min(colorIndex, ramp.length - 1)];
+    const assigned = paletteColorAt(
+      [ramp[Math.min(colorIndex, ramp.length - 1)]],
+      0,
+    );
     return {
       id: nextId(),
       value: niceNum(min + t * span, span),
-      color,
-      opacity: opacityPercentFromColor(color),
+      color: assigned.color,
+      opacity: assigned.opacity,
     };
   });
 }
@@ -1081,7 +1087,7 @@ function StopRow({
   onChange: (s: Stop) => void;
   onRemove: () => void;
 }) {
-  const committedHex = toHex(stop.color).toUpperCase();
+  const committedHex = stripHexAlpha(toHex(stop.color)).toUpperCase();
   const embeddedOpacity = opacityPercentFromColor(stop.color);
   const effectiveOpacity =
     embeddedOpacity < 100 && stop.opacity >= 100 ? embeddedOpacity : stop.opacity;
@@ -1196,16 +1202,17 @@ function StopRow({
     const nextOpacity = Math.max(0, Math.min(100, Math.round(opacity)));
     onChange({
       ...stop,
-      color: colorWithOpacityPercent(stop.color, nextOpacity),
+      color: stripHexAlpha(stop.color),
       opacity: nextOpacity,
     });
   };
 
   const pickColor = (next: string) => {
+    const assigned = paletteColorAt([next], 0);
     onChange({
       ...stop,
-      color: next,
-      opacity: opacityPercentFromColor(next),
+      color: assigned.color,
+      opacity: assigned.opacity,
     });
     setMenuOpen(false);
   };
@@ -1268,7 +1275,7 @@ function StopRow({
               setMenuOpen(true);
             }}
           >
-            <span style={{ background: stop.color }} />
+            <span style={{ background: withOpacity(committedHex, effectiveOpacity) }} />
           </button>
           {menuOpen &&
             createPortal(
@@ -1283,10 +1290,19 @@ function StopRow({
                   <span className="cp-label">Selected color</span>
                   <div className="cp-swatch-menu__grid">
                     {colors.map((c, i) => {
-                      const selected = sameHex(c, stop.color);
+                      const candidate = paletteColorAt([c], 0);
+                      const selected =
+                        sameHex(candidate.color, committedHex) &&
+                        candidate.opacity === effectiveOpacity;
                       const usedElsewhere =
                         !selected &&
-                        usedColors.some((usedColor) => sameHex(c, usedColor));
+                        usedColors.some((usedColor) => {
+                          const used = paletteColorAt([usedColor], 0);
+                          return (
+                            sameHex(used.color, candidate.color) &&
+                            used.opacity === candidate.opacity
+                          );
+                        });
                       return (
                         <button
                           key={`${c}-${i}`}
@@ -1780,13 +1796,13 @@ export default function ColorPalette({
   const trackBg =
     style === "Gradient"
       ? `linear-gradient(90deg, ${sorted
-          .map((s) => `${s.color} ${(((s.value - min) / span) * 100).toFixed(1)}%`)
+          .map((s) => `${withOpacity(s.color, s.opacity)} ${(((s.value - min) / span) * 100).toFixed(1)}%`)
           .join(", ")})`
       : `linear-gradient(90deg, ${sorted
           .map((s, i) => {
             const start = ((s.value - min) / span) * 100;
             const end = i < sorted.length - 1 ? ((sorted[i + 1].value - min) / span) * 100 : 100;
-            return `${s.color} ${start.toFixed(1)}% ${end.toFixed(1)}%`;
+            return `${withOpacity(s.color, s.opacity)} ${start.toFixed(1)}% ${end.toFixed(1)}%`;
           })
           .join(", ")})`;
 
@@ -1830,25 +1846,17 @@ export default function ColorPalette({
                 { gap: -1, value: niceNum(min + (max - min) / 2, max - min) },
               ).value
           : niceNum(min + (max - min) / 2, max - min);
+      const assigned = paletteColorAt(
+        paletteColors,
+        style === "Gradient" ? Math.max(list.length - 1, 0) : list.length,
+      );
       let updated = [
         ...list,
         {
           id: nextId(),
           value,
-          color:
-            paletteColors[
-              (style === "Gradient" ? list.length - 1 : list.length) %
-                Math.max(paletteColors.length, 1)
-            ] ??
-            paletteColors[0],
-          opacity: opacityPercentFromColor(
-            paletteColors[
-              (style === "Gradient" ? list.length - 1 : list.length) %
-                Math.max(paletteColors.length, 1)
-            ] ??
-              paletteColors[0] ??
-              "",
-          ),
+          color: assigned.color,
+          opacity: assigned.opacity,
         },
       ];
       if (style === "Gradient") updated = redistributeStops(updated, min, max, distribution);
@@ -1944,10 +1952,14 @@ export default function ColorPalette({
         <Field label="Category values">
           <div className="cp-category-colors">
             {categoryLabels.map((label, index) => {
-              const categoryColor =
-                config.categoryColors[label] ??
-                paletteColors[index % Math.max(paletteColors.length, 1)] ??
-                config.color;
+              const storedColor = config.categoryColors[label];
+              const assigned = paletteColorAt(paletteColors, index);
+              const categoryColor = storedColor
+                ? stripHexAlpha(storedColor)
+                : assigned.color;
+              const categoryOpacity =
+                config.categoryOpacities[index] ??
+                (storedColor ? opacityPercentFromColor(storedColor) : assigned.opacity);
               return (
                 <div className="cp-category-color" key={label}>
                   <span className="cp-category-color__label" title={label}>
@@ -1958,13 +1970,7 @@ export default function ColorPalette({
                       id: index,
                       value: index,
                       color: categoryColor,
-                      opacity: (() => {
-                        const stored = config.categoryOpacities[index];
-                        const embedded = opacityPercentFromColor(categoryColor);
-                        return stored == null || (stored >= 100 && embedded < 100)
-                          ? embedded
-                          : stored;
-                      })(),
+                      opacity: categoryOpacity,
                     }}
                     colors={paletteColors}
                     usedColors={categoryLabels.flatMap(
@@ -1973,11 +1979,11 @@ export default function ColorPalette({
                           ? []
                           : [
                               config.categoryColors[otherLabel] ??
-                                paletteColors[
-                                  otherIndex %
-                                    Math.max(paletteColors.length, 1)
-                                ] ??
-                                config.color,
+                                colorWithOpacityPercent(
+                                  paletteColorAt(paletteColors, otherIndex).color,
+                                  config.categoryOpacities[otherIndex] ??
+                                    paletteColorAt(paletteColors, otherIndex).opacity,
+                                ),
                             ],
                     )}
                     showValue={false}

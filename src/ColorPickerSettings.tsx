@@ -11,8 +11,9 @@ import { DirectColorPicker } from "./ColorPalette";
 import { uniqueValues } from "./mockDataset";
 import {
   DEFAULT_COLOR_MODE,
-  colorWithOpacityPercent,
   opacityPercentFromColor,
+  paletteColorAt,
+  stripHexAlpha,
   sequentialRamp,
   type ColorModeConfig,
 } from "./previewTheme";
@@ -258,10 +259,16 @@ export default function ColorPickerSettings({
             {categoryValues.length ? (
               <div className="vs-color-picker-categories__list">
                 {categoryValues.map((category, index) => {
-                  const color =
-                    value.categoryColors[category] ??
-                    value.colors[index % Math.max(value.colors.length, 1)] ??
-                    value.color;
+                  const storedColor = value.categoryColors[category];
+                  const assigned = paletteColorAt(value.colors, index);
+                  const color = storedColor
+                    ? stripHexAlpha(storedColor)
+                    : assigned.color;
+                  const opacity =
+                    value.categoryOpacities[index] ??
+                    (storedColor
+                      ? opacityPercentFromColor(storedColor)
+                      : assigned.opacity);
                   return (
                     <div
                       className="vs-color-picker-category"
@@ -270,14 +277,7 @@ export default function ColorPickerSettings({
                       <span className="cp-label">{category}</span>
                       <DirectColorPicker
                         value={color}
-                        opacity={(() => {
-                          const stored = value.categoryOpacities[index];
-                          const embedded = opacityPercentFromColor(color);
-                          return stored == null ||
-                            (stored >= 100 && embedded < 100)
-                            ? embedded
-                            : stored;
-                        })()}
+                        opacity={opacity}
                         onChange={(nextColor) =>
                           onChange({
                             ...value,
@@ -298,7 +298,7 @@ export default function ColorPickerSettings({
                             categoryOpacities,
                             categoryColors: {
                               ...value.categoryColors,
-                              [category]: colorWithOpacityPercent(color, opacity),
+                              [category]: stripHexAlpha(color),
                             },
                           });
                         }}
