@@ -6,6 +6,7 @@ export const MAP_VISUAL_SRC: Record<string, string> = {
   discs: "/visuals-2/discs map.svg",
   "map-area": "/visuals-2/area map.svg",
   heatmap: "/visuals-2/heatmap map.svg",
+  "water-surfaces": "/visuals-2/water surfaces.svg",
 };
 
 const MAP_PICKER_ICON_IDS = new Set([
@@ -17,6 +18,7 @@ const MAP_PICKER_ICON_IDS = new Set([
   "heatmap",
   "points",
   "wind",
+  "water-surfaces",
 ]);
 
 export function getMapVisualSrc(visualId: string): string | undefined {
@@ -27,7 +29,8 @@ export function getMapVisualSrc(visualId: string): string | undefined {
 
 export function getMapPickerIconSrc(visualId: string): string | undefined {
   if (!MAP_PICKER_ICON_IDS.has(visualId)) return undefined;
-  return encodeURI(`${import.meta.env.BASE_URL}figma/map-types/${visualId}.svg`);
+  const version = visualId === "water-surfaces" ? "?v=2" : "";
+  return encodeURI(`${import.meta.env.BASE_URL}figma/map-types/${visualId}.svg`) + version;
 }
 
 export function isMapVisualAsset(visualId: string): boolean {

@@ -22,6 +22,18 @@ export type ControlType =
   | "posgrid"
   | "margins";
 
+export type VisibleWhenCondition =
+  | { group: string; name: string; is: string | string[] }
+  | { group: string; name: string; isNot: string | string[] };
+
+/** A list of conditions must all match. */
+export type VisibleWhen = VisibleWhenCondition | VisibleWhenCondition[];
+
+export function visibleWhenConditions(v: VisibleWhen | undefined): VisibleWhenCondition[] {
+  if (!v) return [];
+  return Array.isArray(v) ? v : [v];
+}
+
 export interface Opt {
   name: string;
   desc: string;
@@ -32,7 +44,7 @@ export interface Opt {
   def: boolean;
   defaultValue?: unknown;
   editableValue?: boolean;
-  visibleWhen?: { group: string; name: string; is: string | string[] };
+  visibleWhen?: VisibleWhen;
 }
 
 export interface Chart {

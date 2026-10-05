@@ -9,6 +9,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode, type Ref } from "react";
 import { createPortal } from "react-dom";
 import Dropdown from "./Dropdown";
+import { MULTI_HUE_PALETTES } from "./heatmapPalettes";
 import {
   ChevronDownIcon,
   ContrastIcon,
@@ -37,16 +38,19 @@ import {
   type PaletteFamily,
   type PaletteStyle,
   type RepeatableRow,
+  type ValueOpacity,
+  applyValueOpacity,
 } from "./previewTheme";
 
 type PaletteType = "Sequential" | "Categorical" | "Diverging";
-type SequentialMode = "Shades" | "Opacity";
+type SequentialMode = "Shades" | "Opacity" | "Multi-hue";
 
 interface Stop {
   id: number;
   value: number;
   color: string;
   opacity: number;
+  opacityPinned?: boolean;
   label?: string;
 }
 
@@ -103,7 +107,14 @@ const OPACITY_PRESETS: PalettePreset[] = [
   { name: "Gold → Transparent", type: "Sequential", sequentialMode: "Opacity", colors: opacityPalette("#f59e0b") },
 ];
 
-function sequentialModeForColors(colors: string[]): SequentialMode {
+const MULTI_HUE_PRESETS: PalettePreset[] = MULTI_HUE_PALETTES.map((palette) => ({
+  ...palette,
+  type: "Sequential",
+  sequentialMode: "Multi-hue",
+}));
+
+function sequentialModeForSelection(name: string, colors: string[]): SequentialMode {
+  if (MULTI_HUE_PRESETS.some((preset) => preset.name === name)) return "Multi-hue";
   return colors.some((color) => /^#[0-9a-f]{8}$/i.test(color))
     ? "Opacity"
     : "Shades";
@@ -144,6 +155,7 @@ const PaletteContext = createContext<{
 
 const DataRangeContext = createContext<DataRange | null>(null);
 const PaletteCategoriesContext = createContext<string[]>([]);
+const ValueOpacityContext = createContext<ValueOpacity | null | undefined>(undefined);
 export type PaletteCardinalityEdgeCase =
   | "more-values"
   | "fewer-values"
@@ -156,11 +168,14 @@ export function ColorPaletteProvider({
   dataRange,
   categoryLabels = [],
   edgeCase = null,
+  valueOpacity,
 }: {
   children: ReactNode;
   dataRange?: DataRange | null;
   categoryLabels?: string[];
   edgeCase?: PaletteCardinalityEdgeCase;
+  /** Value-driven stop opacity for full palettes. Undefined: not offered. Null: switched off. */
+  valueOpacity?: ValueOpacity | null;
 }) {
   const [selection, setSelection] = useState<PaletteSelection>(DEFAULT_SELECTION);
   const value = useMemo(() => ({ selection, setSelection }), [selection]);
@@ -169,7 +184,9 @@ export function ColorPaletteProvider({
       <DataRangeContext.Provider value={dataRange ?? null}>
         <PaletteEdgeCaseContext.Provider value={edgeCase}>
           <PaletteCategoriesContext.Provider value={categoryLabels}>
-            {children}
+            <ValueOpacityContext.Provider value={valueOpacity}>
+              {children}
+            </ValueOpacityContext.Provider>
           </PaletteCategoriesContext.Provider>
         </PaletteEdgeCaseContext.Provider>
       </DataRangeContext.Provider>
@@ -278,19 +295,32 @@ function spreadStops(
   });
 }
 
+const MULTI_HUE_RAMPS = new Set(MULTI_HUE_PALETTES.map((p) => p.colors.join()));
+const MULTI_HUE_STOP_COUNT = 5;
+
+function isMultiHueRamp(colors: string[]): boolean {
+  return MULTI_HUE_RAMPS.has(colors.join());
+}
+
 function gradientStops(
   colors: string[],
   min = 0,
   max = 100,
   distribution = "Linear",
-  count = 2,
+  count?: number,
 ): Stop[] {
   const ramp = colors.length ? colors : DEFAULT_COLOR_MODE.colors;
-  const stopCount = Math.max(2, count);
+  const multiHue = isMultiHueRamp(ramp);
+  const stopCount = Math.max(2, count ?? (multiHue ? MULTI_HUE_STOP_COUNT : 2));
   const sequentialColors =
     stopCount === 2
       ? [ramp[0], ramp[ramp.length - 1]]
-      : [
+      : multiHue
+        ? Array.from(
+            { length: stopCount },
+            (_, i) => ramp[Math.round((i / (stopCount - 1)) * (ramp.length - 1))],
+          )
+        : [
           ramp[0],
           ...Array.from(
             { length: stopCount - 2 },
@@ -308,11 +338,22 @@ function gradientStops(
 }
 
 function toUiStops(list: ColorStop[]): Stop[] {
-  return list.map((s) => ({ id: nextId(), value: s.value, color: s.color, opacity: s.opacity }));
+  return list.map((s) => ({
+    id: nextId(),
+    value: s.value,
+    color: s.color,
+    opacity: s.opacity,
+    ...(s.opacityPinned ? { opacityPinned: true } : {}),
+  }));
 }
 
 function persistable(list: Stop[]): ColorStop[] {
-  return list.map(({ value, color, opacity }) => ({ value, color, opacity }));
+  return list.map(({ value, color, opacity, opacityPinned }) => ({
+    value,
+    color,
+    opacity,
+    ...(opacityPinned ? { opacityPinned: true } : {}),
+  }));
 }
 
 function stepStops(colors: string[], min = 0, max = 100): Stop[] {
@@ -859,9 +900,13 @@ function PalettePickerMenu({
 
   const q = search.trim().toLowerCase();
   const sourcePresets =
-    tab === "Sequential" && sequentialMode === "Opacity"
-      ? OPACITY_PRESETS
-      : PRESETS;
+    tab !== "Sequential"
+      ? PRESETS
+      : sequentialMode === "Opacity"
+        ? OPACITY_PRESETS
+        : sequentialMode === "Multi-hue"
+          ? MULTI_HUE_PRESETS
+          : PRESETS;
   const list = sourcePresets.filter(
     (preset) =>
       preset.type === tab &&
@@ -893,7 +938,7 @@ function PalettePickerMenu({
 
         {tab === "Sequential" && (
           <div className="cp-picker-tabs cp-picker-tabs--sequential-mode">
-            {(["Shades", "Opacity"] as SequentialMode[]).map((mode) => (
+            {(["Shades", "Opacity", "Multi-hue"] as SequentialMode[]).map((mode) => (
               <button
                 key={mode}
                 type="button"
@@ -979,7 +1024,7 @@ export function PaletteSelector({
   const selection = value ?? ctxSelection;
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerTab, setPickerTab] = useState<PaletteType>(selection.type);
-  const selectedSequentialMode = sequentialModeForColors(selection.colors);
+  const selectedSequentialMode = sequentialModeForSelection(selection.name, selection.colors);
   const [pickerSequentialMode, setPickerSequentialMode] =
     useState<SequentialMode>(selectedSequentialMode);
   const [pickerSearch, setPickerSearch] = useState("");
@@ -1659,6 +1704,7 @@ export default function ColorPalette({
   value,
   onChange,
   styles,
+  valueOpacity,
 }: {
   color: string;
   setColor: (c: string) => void;
@@ -1666,11 +1712,15 @@ export default function ColorPalette({
   value?: ColorModeConfig;
   onChange?: (next: ColorModeConfig) => void;
   styles?: PaletteStyle[];
+  /** Undefined: not offered. Null: offered but switched off. Falls back to the provider. */
+  valueOpacity?: ValueOpacity | null;
 }) {
   const isSimple = variant === "simple";
   const isSwatch = variant === "swatch";
   const isStepsOnly = variant === "steps";
   const isFull = !isSimple && !isSwatch && !isStepsOnly;
+  const providedFade = useContext(ValueOpacityContext);
+  const fade = valueOpacity !== undefined ? valueOpacity : isFull ? providedFade : undefined;
   const dataRange = useContext(DataRangeContext);
   const previewCategoryLabels = useContext(PaletteCategoriesContext);
   const paletteEdgeCase = useContext(PaletteEdgeCaseContext);
@@ -1734,10 +1784,13 @@ export default function ColorPalette({
         hi <= domainMax + 1e-6 &&
         !isPlaceholderStops(current);
       if (aligned) return;
-      const s =
+      const s = (
         current.length <= 2
           ? stepStops(paletteColors, domainMin, domainMax)
-          : remapStopValues(current, domainMin, domainMax);
+          : remapStopValues(current, domainMin, domainMax)
+      ).map((stop, i) =>
+        current[i]?.opacityPinned ? { ...stop, opacity: current[i].opacity, opacityPinned: true } : stop,
+      );
       setSStops(s);
       commit({ style: "Steps", stops: persistable(s) });
       return;
@@ -1750,6 +1803,8 @@ export default function ColorPalette({
       domainMax,
       config.distribution,
       Math.max(2, gStops.length),
+    ).map((s, i) =>
+      gStops[i]?.opacityPinned ? { ...s, opacity: gStops[i].opacity, opacityPinned: true } : s,
     );
     setGStops(g);
     commit({ stops: persistable(g) });
@@ -1813,9 +1868,37 @@ export default function ColorPalette({
     });
   };
 
+  const fadeOn = fade != null;
+  const fadeKey = fade ? `${fade.strength}:${fade.curve}` : String(fade);
+  const stopsKey = stops.map((s) => `${s.value}:${s.opacity}:${s.opacityPinned ? 1 : 0}`).join("|");
+  const fadeWasOn = useRef(fadeOn);
+  useEffect(() => {
+    if (fade === undefined || style === "Single" || style === "Per Category") return;
+    const turnedOff = fadeWasOn.current && !fadeOn;
+    fadeWasOn.current = fadeOn;
+    if (!fadeOn && !turnedOff) return;
+    const values = stops.map((s) => s.value);
+    const updated = applyValueOpacity(
+      stops,
+      { min: Math.min(...values), max: Math.max(...values) },
+      fade,
+    );
+    if (updated === stops) return;
+    setStops(updated);
+    persistStops(updated);
+    // Recompute only when the fade or the stops change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fadeKey, stopsKey, style]);
+
   const updateStop = (next: Stop) => {
     setStops((list) => {
-      const updated = list.map((s) => (s.id === next.id ? next : s));
+      const updated = list.map((s) =>
+        s.id !== next.id
+          ? s
+          : fadeOn && next.opacity !== s.opacity
+            ? { ...next, opacityPinned: true }
+            : next,
+      );
       persistStops(updated);
       return updated;
     });

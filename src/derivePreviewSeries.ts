@@ -304,7 +304,7 @@ export function derivePreviewSeries({
   }
 
   const isMap = [
-    "arcs", "fences", "pillars", "discs", "map-area", "heatmap", "points", "wind",
+    "arcs", "fences", "pillars", "discs", "map-area", "heatmap", "points", "wind", "water-surfaces",
   ].includes(visualId);
 
   if (
@@ -598,7 +598,7 @@ export function derivePreviewSeries({
             ? mapped(config, "Coordinates (Geometry)")
             : visualId === "arcs"
               ? mapped(config, "Origin")
-              : visualId === "wind" || visualId === "heatmap"
+              : visualId === "wind" || visualId === "heatmap" || visualId === "water-surfaces"
                 ? mapped(config, "Coordinates")
                 : visualId === "map-area"
                   ? mapped(config, "Type") || mapped(config, "Name")

@@ -1098,7 +1098,7 @@ button {
 
 .viz-type-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: var(--space-lg);
 }
 
@@ -1127,11 +1127,10 @@ button {
 
 .viz-type-card {
   display: flex;
-  flex-direction: row;
+  flex-direction: column;
   align-items: stretch;
-  gap: var(--space-lg);
+  gap: var(--space-md);
   min-width: 0;
-  min-height: 104px;
   padding: var(--space-md);
   border: 1px solid var(--lc-border-default);
   border-radius: var(--radius-xl);
@@ -1187,22 +1186,30 @@ button {
 .viz-type-card__artwrap {
   position: relative;
   display: flex;
-  flex: 0 0 112px;
+  flex: 0 0 auto;
   align-items: center;
   justify-content: center;
-  width: 112px;
-  min-height: 80px;
-  overflow: hidden;
-  border-radius: var(--radius-lg);
+  width: 100%;
+  height: auto;
+  min-height: 0;
+  padding-top: var(--space-sm);
+  overflow: visible;
+  background: none;
 }
 
-.viz-type-card__artwrap .visual-artwork--card,
-.viz-type-card__artwrap .visual-artwork--map {
-  width: 100%;
-  height: 100%;
-  max-height: 88px;
+.viz-type-card__artwrap .visual-artwork--stack {
+  width: 132px;
+  height: 132px;
+  max-height: none;
   object-fit: contain;
   object-position: center;
+}
+
+.viz-type-card__artwrap .visual-artwork--phosphor.visual-artwork--stack {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--lc-text-brand);
 }
 
 .viz-type-card__artwrap .visual-artwork--chart-picker {
@@ -1224,12 +1231,12 @@ button {
 
 .viz-type-card__body {
   display: flex;
-  flex: 1 1 auto;
+  flex: 0 0 auto;
   flex-direction: column;
-  justify-content: center;
+  justify-content: flex-start;
   gap: var(--space-xs);
   min-width: 0;
-  padding: var(--space-xs) var(--space-sm) var(--space-xs) 0;
+  padding: 0 var(--space-xs) var(--space-xs);
 }
 
 .viz-type-card__heading {
@@ -4256,6 +4263,26 @@ button {
   font-size: 0.65em;
   line-height: 0;
 }
+@keyframes water-sheen-shift {
+  from { stroke-dashoffset: 0; }
+  to { stroke-dashoffset: -48; }
+}
+.water-sheen {
+  stroke-dasharray: 10 14;
+  animation-name: water-sheen-shift;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+@keyframes water-current-drift {
+  from { transform: translateX(-6px); opacity: 0.25; }
+  40% { opacity: 1; }
+  to { transform: translateX(16px); opacity: 0.1; }
+}
+.water-current {
+  animation-name: water-current-drift;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
 @keyframes cp-wind-drift {
   from { transform: translateX(0); opacity: 0.2; }
   30% { opacity: 1; }
@@ -5801,7 +5828,7 @@ button {
   backdrop-filter: blur(var(--lc-backdrop-blur-ui));
 }
 .cp-picker-tabs--sequential-mode {
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(3, 1fr);
 }
 .cp-picker-tab {
   height: 30px;

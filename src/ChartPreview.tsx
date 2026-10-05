@@ -147,7 +147,7 @@ function mapTooltip(cfg: Cfg, tip: MarkTip | undefined) {
 
 const pickerCfg: Cfg = (_group, _name, fallback) => fallback;
 
-const MAP_IDS = new Set(["arcs", "fences", "pillars", "discs", "map-area", "heatmap", "points", "wind"]);
+const MAP_IDS = new Set(["arcs", "fences", "pillars", "discs", "map-area", "heatmap", "points", "wind", "water-surfaces"]);
 
 function polar(cx: number, cy: number, r: number, deg: number): [number, number] {
   const a = ((deg - 90) * Math.PI) / 180;

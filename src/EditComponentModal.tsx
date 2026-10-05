@@ -43,13 +43,14 @@ import {
   ChevronDownIcon,
   TrashIcon,
 } from "./icons";
-import { charts } from "./chartModel";
+import { charts, visibleWhenConditions } from "./chartModel";
 import type { Opt } from "./chartModel";
 import {
   defaultGradientAxisForVisual,
   fieldsForVisual,
   isFeatureTabOn,
   isFieldVisible,
+  isTabVisible,
   settingsNavSections,
   subCategoriesForVisual,
 } from "./visualSettingsCatalog";
@@ -67,7 +68,16 @@ import { getSettingsTabIcon } from "./visualIcons";
 import Dropdown from "./Dropdown";
 import PhosphorIconPicker from "./PhosphorIconPicker";
 import { derivePreviewSeries, mappedMeasureColumn } from "./derivePreviewSeries";
-import { allColumnNames, fieldOptionsFor, numericExtent, uniqueValues } from "./mockDataset";
+import { heatmapSettings, valueFade } from "./heatmapSettings";
+import { waterSurfaceSettings } from "./waterSurfaceSettings";
+import { WATER_CURRENT_PALETTE, WATER_PLUME_PALETTE, WATER_SPILL_PALETTE } from "./waterPalettes";
+import {
+  allColumnNames,
+  fieldOptionsFor,
+  numericExtent,
+  numericPercentileExtent,
+  uniqueValues,
+} from "./mockDataset";
 import {
   DEFAULT_COLOR_MODE,
   DEFAULT_GRADIENT,
@@ -81,6 +91,7 @@ import {
   repeatableToStops,
   stopsToRepeatable,
   type GradientStop,
+  type PaletteStyle,
   type RepeatableRow,
 } from "./previewTheme";
 import type { PreviewSeries } from "./componentPreviewProfiles";
@@ -445,6 +456,36 @@ function isZoomScalingField(o: Opt) {
   );
 }
 
+function isUntouchedPlumePalette(value: unknown): boolean {
+  if (!value || typeof value !== "object") return false;
+  const palette = value as { style?: string; color?: string; paletteName?: string };
+  return (
+    palette.paletteName === WATER_PLUME_PALETTE.paletteName &&
+    palette.style === WATER_PLUME_PALETTE.style &&
+    palette.color?.toLowerCase() === WATER_PLUME_PALETTE.color.toLowerCase()
+  );
+}
+
+function sliderPercentFor(o: Opt, value: number): number {
+  const range = (o.desc ?? "").match(/(-?\d*\.?\d+)\s*[–—-]\s*(-?\d*\.?\d+)/);
+  const lo = range ? parseFloat(range[1]) : 0;
+  const hi = range ? parseFloat(range[2]) : 100;
+  if (hi === lo) return 0;
+  return Math.round(((value - lo) / (hi - lo)) * 100);
+}
+
+/** Unset Water Surfaces fields use the Plume catalog default. Spill and Current swap in their own until the control is moved. */
+function waterSurfaceModeDefault(visualId: string, mode: unknown, o: Opt): unknown {
+  if (visualId !== "water-surfaces") return undefined;
+  if (mode === "Current" && o.group === "Surface Style" && o.name === "Opacity") return sliderPercentFor(o, 0.3);
+  if (mode === "Spill" && o.group === "Stems" && o.name === "Max height") return sliderPercentFor(o, 24000);
+  if (mode === "Spill" && o.group === "Stems" && o.name === "Fade start zoom") return sliderPercentFor(o, 7);
+  if (mode === "Spill" && o.group === "Stems" && o.name === "Hidden by zoom") return sliderPercentFor(o, 9.5);
+  if (mode === "Current" && o.group === "Color" && o.name === "Palette") return WATER_CURRENT_PALETTE;
+  if (mode === "Spill" && o.group === "Color" && o.name === "Palette") return WATER_SPILL_PALETTE;
+  return undefined;
+}
+
 function defaultFor(o: Opt, visualId?: string): unknown {
   if (o.defaultValue !== undefined) return o.defaultValue;
   switch (o.type) {
@@ -497,7 +538,7 @@ function defaultFor(o: Opt, visualId?: string): unknown {
 }
 
 /* slider display value derived from the option's range description */
-function sliderScale(o: Opt): { lo: number; hi: number; ticks: number; unit: string } {
+function sliderScale(o: Opt): { lo: number; hi: number; ticks: number; step: number; unit: string } {
   const desc = o.desc ?? "";
   const range = desc.match(/(-?\d*\.?\d+)\s*[–—-]\s*(-?\d*\.?\d+)/);
   const stepMatch = desc.match(/step\s+(-?\d*\.?\d+)/i);
@@ -514,23 +555,25 @@ function sliderScale(o: Opt): { lo: number; hi: number; ticks: number; unit: str
   /* 0–1 ranges are continuous (opacity/ratio), not a 2-stop toggle. */
   if (!step && Number.isInteger(lo) && Number.isInteger(hi) && span > 1 && span <= 12) step = 1;
   const ticks = step > 0 && span > 0 ? Math.round(span / step) + 1 : 0;
-  return { lo, hi, ticks: ticks >= 2 && ticks <= 12 ? ticks : 0, unit };
+  return { lo, hi, ticks: ticks >= 2 && ticks <= 12 ? ticks : 0, step, unit };
 }
 
 function sliderValue(o: Opt, pct: number): number {
-  const { lo, hi, ticks } = sliderScale(o);
+  const { lo, hi, ticks, step } = sliderScale(o);
   const t = Math.max(0, Math.min(100, pct)) / 100;
   if (ticks >= 2) {
     const idx = Math.round(t * (ticks - 1));
     return lo + (idx / (ticks - 1)) * (hi - lo);
   }
-  return lo + t * (hi - lo);
+  const raw = lo + t * (hi - lo);
+  return step > 0 ? Math.min(hi, lo + Math.round((raw - lo) / step) * step) : raw;
 }
 
 function sliderDisplay(o: Opt, pct: number) {
-  const { lo, hi, ticks, unit } = sliderScale(o);
+  const { lo, hi, ticks, step, unit } = sliderScale(o);
   const val = sliderValue(o, pct);
-  const decimals = hi <= 1 ? 2 : ticks && (hi - lo) / (ticks - 1) < 1 ? 1 : 0;
+  const stepDecimals = step > 0 && step < 1 ? Math.min(2, String(step).split(".")[1]?.length ?? 0) : 0;
+  const decimals = hi <= 1 ? 2 : stepDecimals || (ticks && (hi - lo) / (ticks - 1) < 1 ? 1 : 0);
   const formatted = decimals === 0 ? String(Math.round(val)) : val.toFixed(decimals);
   if (!unit) return formatted;
   return unit === "°" || unit === "%" ? `${formatted}${unit}` : `${formatted} ${unit}`;
@@ -1161,9 +1204,11 @@ function Control({
             value={current}
             onChange={(next) => setVal(o, next)}
             styles={
-              o.group === "Color"
-                ? ["Single", "Per Category", "Gradient", "Steps"]
-                : undefined
+              o.values.length
+                ? (o.values as PaletteStyle[])
+                : o.group === "Color"
+                  ? ["Single", "Per Category", "Gradient", "Steps"]
+                  : undefined
             }
           />
         );
@@ -1664,9 +1709,19 @@ function renderFieldRows(
 }
 
 function visibleWhenKey(o: Opt): string | null {
-  if (!o.visibleWhen) return null;
-  const expected = o.visibleWhen.is;
-  return `${o.visibleWhen.group}::${o.visibleWhen.name}::${Array.isArray(expected) ? expected.join("|") : expected}`;
+  const conditions = visibleWhenConditions(o.visibleWhen);
+  if (!conditions.length) return null;
+  return conditions
+    .map((c) => {
+      const [op, v] = "is" in c ? ["is", c.is] : ["not", c.isNot];
+      return `${c.group}::${c.name}::${op}::${Array.isArray(v) ? v.join("|") : v}`;
+    })
+    .join("&&");
+}
+
+function revealsFrom(item: Opt, parent: Opt): boolean {
+  const first = visibleWhenConditions(item.visibleWhen)[0];
+  return first?.group === parent.group && first?.name === parent.name;
 }
 
 type RevealGroup = { key: string; fields: Opt[] };
@@ -1686,7 +1741,7 @@ function clusterFields(items: Opt[]): FieldCluster[] {
     }
     i += 1;
     const reveals: RevealGroup[] = [];
-    while (i < items.length && items[i].visibleWhen?.group === o.group && items[i].visibleWhen?.name === o.name) {
+    while (i < items.length && revealsFrom(items[i], o)) {
       const key = visibleWhenKey(items[i])!;
       const fields: Opt[] = [];
       while (i < items.length && visibleWhenKey(items[i]) === key) fields.push(items[i++]);
@@ -3259,8 +3314,6 @@ export default function EditComponentModal({
 
   const visualFields = useMemo(() => fieldsForVisual(displayVisualId), [displayVisualId]);
   const subCategories = useMemo(() => subCategoriesForVisual(displayVisualId), [displayVisualId]);
-  const navSections = useMemo(() => settingsNavSections(displayVisualId), [displayVisualId]);
-
   useEffect(() => {
     const fieldKeys = visualFields.filter((field) => field.type === "field").map(keyOf);
     setConfig((current) => {
@@ -3346,7 +3399,11 @@ export default function EditComponentModal({
     if (o.type === "field" && o.level === "required" && !isValueFilled(o, v)) {
       return defaultFor(o, displayVisualId);
     }
-    return v === undefined ? defaultFor(o, displayVisualId) : v;
+    const modeDefault = waterSurfaceModeDefault(displayVisualId, config["Surface Style::Mode"], o);
+    if (v === undefined || (o.group === "Color" && o.name === "Palette" && isUntouchedPlumePalette(v))) {
+      return modeDefault !== undefined ? modeDefault : defaultFor(o, displayVisualId);
+    }
+    return v;
   };
   const setVal = (o: Opt, v: unknown) => setConfig((c) => ({ ...c, [keyOf(o)]: v }));
 
@@ -3407,6 +3464,16 @@ export default function EditComponentModal({
     return getVal(field);
   };
 
+  const navSections = settingsNavSections(displayVisualId, getValByKey);
+  const visibleTabsKey = navSections.flatMap((section) => section.tabs).join("\n");
+
+  useEffect(() => {
+    const visibleTabs = visibleTabsKey.split("\n");
+    if (subCategories.includes(activeSubCategory) && !visibleTabs.includes(activeSubCategory)) {
+      setActiveSubCategory(visibleTabs[0] ?? "Mapping");
+    }
+  }, [visibleTabsKey, subCategories, activeSubCategory]);
+
   const normalizedSettingsQuery = query.trim().toLowerCase();
   const searchingVisualSettings = normalizedSettingsQuery.length > 0;
   const tabFields = visualFields.filter((o) => o.group === activeSubCategory);
@@ -3415,6 +3482,7 @@ export default function EditComponentModal({
         (o) =>
           (o.level !== "advanced" || advancedSettingsOpen) &&
           isFieldVisible(o, getValByKey) &&
+          isTabVisible(displayVisualId, o.group, getValByKey) &&
           `${o.group} ${o.name} ${o.desc}`.toLowerCase().includes(normalizedSettingsQuery),
       )
     : [];
@@ -3483,9 +3551,26 @@ export default function EditComponentModal({
     );
   }, [previewSeries]);
 
+  const isHeatmap = displayVisualId === "heatmap";
+  const isWaterSurfaces = displayVisualId === "water-surfaces";
+  const isMapLayer = visualTypeById(displayVisualId)?.category === "map-layer";
+  const waterMode = isWaterSurfaces ? waterSurfaceSettings(cfg).mode : null;
+  const clipOutliers =
+    (isHeatmap && heatmapSettings(cfg).clipOutliers) ||
+    (isWaterSurfaces && waterMode !== "Spill" && waterSurfaceSettings(cfg).clipOutliers);
   const colorDataRange = useMemo(
-    () => numericExtent(mappedMeasureColumn(resolvedConfig)),
-    [resolvedConfig],
+    () =>
+      clipOutliers
+        ? numericPercentileExtent(mappedMeasureColumn(resolvedConfig), 10, 99)
+        : numericExtent(mappedMeasureColumn(resolvedConfig)),
+    [resolvedConfig, clipOutliers],
+  );
+  const fadeSetting = isMapLayer && waterMode !== "Spill" ? valueFade(cfg) : undefined;
+  const fadeKey = fadeSetting ? `${fadeSetting.strength}:${fadeSetting.curve}` : String(fadeSetting);
+  const valueOpacity = useMemo(
+    () => fadeSetting,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [fadeKey],
   );
 
   const goNext = () => {
@@ -3650,6 +3735,7 @@ export default function EditComponentModal({
         dataRange={colorDataRange}
         categoryLabels={paletteCategoryLabels}
         edgeCase={paletteEdgeCase}
+        valueOpacity={valueOpacity}
       >
       <div className="modal">
         {/* Header */}

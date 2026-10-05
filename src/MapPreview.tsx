@@ -1,5 +1,8 @@
 import type { MouseEvent as ReactMouseEvent } from "react";
 import type { PreviewSeries } from "./componentPreviewProfiles";
+import HeatmapPreview from "./HeatmapPreview";
+import WaterSurfacesPreview from "./WaterSurfacesPreview";
+import { valueFade } from "./heatmapSettings";
 import { getPhosphorIcon } from "./phosphorIconCatalog";
 import {
   BRAND,
@@ -10,8 +13,8 @@ import {
   asZoomScaling,
   resolveColorMode,
   sampleZoomScale,
-  sequentialRamp,
   sliderMapped,
+  valueOpacityAt,
 } from "./previewTheme";
 
 type Cfg = (group: string, name: string, fallback: unknown) => unknown;
@@ -142,6 +145,10 @@ export default function MapPreview({ cfg, visualId, series, compact, onMarkEnter
   const zoomScaling = asZoomScaling(cfg("Zoom Scaling", "Zoom scaling", legacyZoom));
   const zoomScale = sampleZoomScale(zoomScaling, 350);
   const zoomFactor = Math.max(0.5, Math.min(2, 1 + zoomScale * 0.025));
+  const fade =
+    visualId === "heatmap" || visualId === "water-surfaces" ? null : valueFade(cfg);
+  const faded = (base: number, value: number) =>
+    fade ? base * (valueOpacityAt(max ? value / max : 0, fade) / 100) : base;
 
   let layer: React.ReactNode = null;
 
@@ -167,7 +174,7 @@ export default function MapPreview({ cfg, visualId, series, compact, onMarkEnter
           const sw = Math.max(1, stroke + zoomScale * 0.15);
           return (
             <g key={i} {...hit(orig(from))}>
-              <path d={d} fill="none" stroke={color} strokeWidth={sw} strokeLinecap="round" />
+              <path d={d} fill="none" stroke={color} strokeWidth={sw} strokeLinecap="round" opacity={faded(1, a.value)} />
               {indicator && (
                 <path
                   className="map-arc-shimmer"
@@ -209,7 +216,7 @@ export default function MapPreview({ cfg, visualId, series, compact, onMarkEnter
     layer = (
       <>
         <Ground cfg={cfg} />
-        <path d={d} fill="none" stroke={fenceColor} strokeWidth={width} strokeLinecap="round" opacity={0.85} />
+        <path d={d} fill="none" stroke={fenceColor} strokeWidth={width} strokeLinecap="round" opacity={faded(0.85, visible.reduce((sum, point) => sum + point.value, 0) / Math.max(visible.length, 1))} />
         {visible.map((p) => (
           <circle
             key={p.id}
@@ -233,7 +240,7 @@ export default function MapPreview({ cfg, visualId, series, compact, onMarkEnter
           const x = P + p.x * (W - 2 * P);
           const bh = (p.value / peak) * (28 + maxH / 220 + zoomScale * 0.4);
           const color = mapColor(cfg, p.value, max, p.category, i);
-          return <rect key={p.id} x={x - 7} y={H - 32 - bh} width={14} height={bh} rx={3} fill={color} opacity={0.86} {...hit(orig(p))} />;
+          return <rect key={p.id} x={x - 7} y={H - 32 - bh} width={14} height={bh} rx={3} fill={color} opacity={faded(0.86, p.value)} {...hit(orig(p))} />;
         })}
       </>
     );
@@ -261,7 +268,7 @@ export default function MapPreview({ cfg, visualId, series, compact, onMarkEnter
               ry={r * 0.38}
               fill={color}
               stroke={color}
-              opacity={0.7}
+              opacity={faded(0.7, p.value)}
               {...hit(orig(p))}
             />
           );
@@ -295,7 +302,7 @@ export default function MapPreview({ cfg, visualId, series, compact, onMarkEnter
               fill={color}
               stroke={highlight ? "#fff" : "none"}
               strokeWidth={highlight ? 1.5 : 0}
-              opacity={0.45}
+              opacity={faded(0.45, p.value)}
               {...hit(orig(p))}
             />
           );
@@ -303,81 +310,27 @@ export default function MapPreview({ cfg, visualId, series, compact, onMarkEnter
       </>
     );
   } else if (visualId === "heatmap") {
-    const style = str(cfg("Heatmap Style", "Style", "Pond"), "Pond");
-    const gradFill = bool(cfg("Bin & extrusion", "Gradient fill", false), false);
-    const extrude = bool(cfg("Bin & extrusion", "3D extrusion", true), true);
-    const elev = sliderMapped(cfg("Bin & extrusion", "Elevation Scale", 50), 0, 1000, 500);
-    const coverage = sliderMapped(cfg("Bin & extrusion", "Coverage", 95), 0, 1, 0.95);
-    const cell = sliderMapped(cfg("Bin & extrusion", "Cell size", 50), 200, 2000, 1000);
-    const falloff = sliderMapped(cfg("Advanced", "Falloff Rate", 20), 0, 1, 0.2);
-    const sprites = sliderMapped(cfg("Advanced", "Sprites per Point", 20), 1, 4, 1);
-    const sizeMul = sliderMapped(cfg("Advanced", "Size Multiplier", 50), 0.4, 2, 1);
-    const bands = Math.max(3, Math.round(sliderMapped(cfg("Contour Terrain", "Band count", 50), 3, 16, 8)));
-    const cols = Math.max(6, Math.round(18 - cell / 220));
-    const rowsN = Math.max(4, Math.round(11 - cell / 280));
-    const gap = (1 - coverage) * 6;
-    const cellW = (W - 2 * P - gap * (cols - 1)) / cols;
-    const cellH = (H - 2 * P - gap * (rowsN - 1)) / rowsN;
-    const palette = mapPalette(cfg);
     layer = (
-      <>
-        {Array.from({ length: rowsN * cols }).map((_, i) => {
-          const row = Math.floor(i / cols);
-          const col = i % cols;
-          const x = P + col * (cellW + gap);
-          const y = P + row * (cellH + gap);
-          const nx = col / cols;
-          const ny = row / rowsN;
-          const heat = points.reduce((acc, p) => {
-            const d = Math.hypot(p.x - nx, p.y - ny);
-            return acc + (p.value / max) * Math.exp(-d * (2 + falloff * 8));
-          }, 0);
-          const nearest = points.reduce(
-            (best, p, pi) => {
-              const d = Math.hypot(p.x - nx, p.y - ny);
-              return d < best.d ? { i: pi, d } : best;
-            },
-            { i: 0, d: Infinity },
-          ).i;
-          const t = Math.max(0, Math.min(1, heat));
-          const color = gradFill || palette.style !== "Single"
-            ? resolveColorMode(palette, t, i)
-            : mixOrSolid(solid, t);
-          const hLift = extrude ? t * (elev / 80) : 0;
-          if (style === "Contour") {
-            const band = Math.round(t * bands);
-            if (band <= 0) return null;
-            return (
-              <rect
-                key={i}
-                x={x}
-                y={y - hLift}
-              width={cellW * sizeMul * zoomFactor}
-              height={cellH * sizeMul * zoomFactor}
-                fill="none"
-                stroke={color}
-                strokeWidth={sliderMapped(cfg("Contour Terrain", "Band width", 50), 0.02, 0.2, 0.06) * 40}
-                opacity={0.35 + t * 0.5}
-                {...hit(nearest)}
-              />
-            );
-          }
-          const rx = style === "Grid" ? 0 : 3;
-          return Array.from({ length: Math.max(1, Math.round(sprites)) }).map((__, s) => (
-            <rect
-              key={`${i}-${s}`}
-              x={x + s}
-              y={y - hLift - s}
-              width={cellW * sizeMul * zoomFactor}
-              height={cellH * sizeMul * zoomFactor}
-              rx={rx}
-              fill={color}
-              opacity={0.2 + t * 0.75}
-              {...hit(nearest)}
-            />
-          ));
-        })}
-      </>
+      <HeatmapPreview
+        cfg={cfg}
+        points={visible}
+        width={W}
+        height={H}
+        pad={P}
+        zoomFactor={zoomFactor}
+        hit={(i) => hit(orig(visible[i]))}
+      />
+    );
+  } else if (visualId === "water-surfaces") {
+    layer = (
+      <WaterSurfacesPreview
+        cfg={cfg}
+        points={visible}
+        width={W}
+        height={H}
+        pad={P}
+        hit={(i) => hit(orig(visible[i]))}
+      />
     );
   } else if (visualId === "wind") {
     const density = sliderMapped(cfg("Animation", "Particle Density", 50), 2000, 32000, 16384);
@@ -403,6 +356,7 @@ export default function MapPreview({ cfg, visualId, series, compact, onMarkEnter
               y2={y - 6}
               stroke={color}
               strokeWidth={1.2 + zoomScale * 0.04}
+              opacity={faded(1, p?.value ?? 1)}
               strokeLinecap="round"
               {...(p ? hit(orig(p)) : {})}
               style={{
@@ -439,11 +393,11 @@ export default function MapPreview({ cfg, visualId, series, compact, onMarkEnter
           return (
             <g key={p.id} transform={`translate(${x} ${y})`} {...hit(orig(p))}>
               {shape === "Square" || shape === "Cube" ? (
-                <rect x={-r} y={-r - (kind === "3D" ? 3 : 0)} width={r * 2} height={r * 2} rx={1} fill={empty ? "none" : color} stroke={color} />
+                <rect x={-r} y={-r - (kind === "3D" ? 3 : 0)} width={r * 2} height={r * 2} rx={1} fill={empty ? "none" : color} stroke={color} opacity={faded(1, p.value)} />
               ) : shape === "Diamond" || shape === "Cone" ? (
-                <polygon points={`0,${-r - 2} ${r},${r} ${-r},${r}`} fill={empty ? "none" : color} stroke={color} />
+                <polygon points={`0,${-r - 2} ${r},${r} ${-r},${r}`} fill={empty ? "none" : color} stroke={color} opacity={faded(1, p.value)} />
               ) : (
-                <circle cx={0} cy={0} r={r} fill={empty ? "none" : color} stroke={color} opacity={kind === "3D" ? 0.95 : 0.88} />
+                <circle cx={0} cy={0} r={r} fill={empty ? "none" : color} stroke={color} opacity={faded(kind === "3D" ? 0.95 : 0.88, p.value)} />
               )}
               {kind === "3D" && shape === "Sphere" && <circle cx={-r * 0.3} cy={-r * 0.3} r={r * 0.25} fill="#fff" opacity={0.35} />}
               {!empty && iconMode !== "By category" && (
@@ -471,9 +425,4 @@ export default function MapPreview({ cfg, visualId, series, compact, onMarkEnter
       )}
     </>
   );
-}
-
-function mixOrSolid(base: string, t: number) {
-  const ramp = sequentialRamp(base, 6);
-  return ramp[Math.max(0, Math.min(5, Math.round(t * 5)))];
 }

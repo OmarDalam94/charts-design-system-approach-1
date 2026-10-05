@@ -13,7 +13,7 @@ import {
 type Props = {
   visualId: string;
   category: "chart" | "map-layer";
-  size?: "card" | "bar" | "preview" | "map";
+  size?: "card" | "bar" | "preview" | "map" | "stack";
 };
 
 export default function VisualArtwork({ visualId, category, size = "card" }: Props) {
@@ -31,6 +31,27 @@ export default function VisualArtwork({ visualId, category, size = "card" }: Pro
     visualId === "donut-chart" ||
     visualId === "gauge-linear" ||
     visualId === "polar-wind-rose";
+
+  if (size === "stack") {
+    const src =
+      category === "chart" ? getChartPickerIconSrc(visualId) : getMapPickerIconSrc(visualId);
+    if (src) {
+      return (
+        <img
+          className="visual-artwork visual-artwork--stack"
+          src={src}
+          alt=""
+          draggable={false}
+        />
+      );
+    }
+    const Icon = getVisualIcon(visualId);
+    return (
+      <span className="visual-artwork visual-artwork--phosphor visual-artwork--stack" aria-hidden="true">
+        <Icon size={132} weight="regular" />
+      </span>
+    );
+  }
 
   if (selectedIconSrc) {
     return (

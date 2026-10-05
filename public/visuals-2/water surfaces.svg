@@ -1,0 +1,18 @@
+<svg width="320" height="180" viewBox="0 0 320 180" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="320" height="180" rx="12" fill="#0e1c28"/>
+  <path d="M18 78c28-34 62-40 104-28 36 10 58 6 92-8 28-12 52-8 78 10 18 12 22 36 10 58-16 28-48 42-86 38-34-4-52 16-90 18-42 2-78-18-96-42-10-14-14-30-12-46Z" fill="#14384f"/>
+  <path d="M36 96c22 10 40 8 62-4 24-14 46-10 70 2 22 10 40 8 64-6" stroke="#7ec8c3" stroke-opacity="0.7" stroke-width="2" stroke-linecap="round"/>
+  <path d="M48 118c26 8 48 4 74-8 28-14 50-8 78 4" stroke="#53A9E8" stroke-opacity="0.55" stroke-width="2" stroke-linecap="round"/>
+  <ellipse cx="118" cy="86" rx="34" ry="16" fill="#ff5e62" fill-opacity="0.35"/>
+  <ellipse cx="118" cy="86" rx="18" ry="8" fill="#ff5e62"/>
+  <line x1="118" y1="86" x2="118" y2="48" stroke="#ff5e62" stroke-width="2" stroke-linecap="round"/>
+  <path d="M168 108c18-6 34-2 48 6 12 7 22 6 34-2 10-6 20-4 28 2" stroke="#111" stroke-width="14" stroke-linecap="round"/>
+  <path d="M168 108c18-6 34-2 48 6 12 7 22 6 34-2 10-6 20-4 28 2" stroke="url(#sheen)" stroke-width="3" stroke-linecap="round"/>
+  <defs>
+    <linearGradient id="sheen" x1="168" y1="108" x2="278" y2="114" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#7cf4c2"/>
+      <stop offset="0.45" stop-color="#f6e27a"/>
+      <stop offset="1" stop-color="#ff8ad4"/>
+    </linearGradient>
+  </defs>
+</svg>

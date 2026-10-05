@@ -491,7 +491,35 @@ export function listHas(v: unknown, label: string): boolean {
 export type PaletteFamily = "Sequential" | "Categorical" | "Diverging";
 export type PaletteStyle = "Single" | "Per Category" | "Gradient" | "Steps";
 
-export type ColorStop = { value: number; color: string; opacity: number };
+/** `opacityPinned` marks an opacity the user set by hand; value-driven opacity leaves it alone. */
+export type ColorStop = { value: number; color: string; opacity: number; opacityPinned?: boolean };
+
+export type ValueOpacity = { strength: number; curve: number };
+
+/** Map 3D's heat map fade: `1 - strength * (1 - t^curve)` over the data range, as a 0–100 opacity. */
+export function valueOpacityAt(t: number, { strength, curve }: ValueOpacity): number {
+  const u = Math.max(0, Math.min(1, t));
+  const shaped = Math.pow(u, Math.max(curve, 1e-3));
+  return Math.round(100 * (1 - Math.max(0, Math.min(1, strength)) * (1 - shaped)));
+}
+
+/** Returns the same array when nothing changed, so callers can skip a commit. */
+export function applyValueOpacity<S extends ColorStop>(
+  stops: S[],
+  range: { min: number; max: number },
+  fade: ValueOpacity | null,
+): S[] {
+  const span = range.max - range.min || 1;
+  let changed = false;
+  const next = stops.map((stop) => {
+    if (stop.opacityPinned) return stop;
+    const opacity = fade ? valueOpacityAt((stop.value - range.min) / span, fade) : 100;
+    if (opacity === stop.opacity) return stop;
+    changed = true;
+    return { ...stop, opacity };
+  });
+  return changed ? next : stops;
+}
 
 export type ColorModeConfig = {
   paletteName: string;

@@ -9,7 +9,10 @@
  * Nav groups are Notion Sub Categories, filtered by the selected visual type.
  */
 
-import type { ControlType, Opt } from "./chartModel";
+import { visibleWhenConditions } from "./chartModel";
+import { HEATMAP_DEFAULT_PALETTE } from "./heatmapPalettes";
+import { WATER_PLUME_PALETTE } from "./waterPalettes";
+import type { ControlType, Opt, VisibleWhen, VisibleWhenCondition } from "./chartModel";
 
 export type NotionVisualType =
   | "All Charts & KPIs"
@@ -37,6 +40,7 @@ export type NotionVisualType =
   | "Pillars"
   | "Areas"
   | "Heatmap"
+  | "Water Surfaces"
   | "Discs"
   | "Arcs";
 
@@ -65,6 +69,7 @@ export const NOTION_TYPE_BY_VISUAL_ID: Record<string, NotionVisualType> = {
   pillars: "Pillars",
   "map-area": "Areas",
   heatmap: "Heatmap",
+  "water-surfaces": "Water Surfaces",
   discs: "Discs",
   arcs: "Arcs",
 };
@@ -92,6 +97,7 @@ const ALL_MAP_LAYERS: NotionVisualType[] = [
   "Discs",
   "Fences",
   "Heatmap",
+  "Water Surfaces",
   "Wind",
   "Points",
   "Areas",
@@ -166,8 +172,8 @@ const TOOLTIPS: NotionVisualType[] = [
 ];
 const BARS: NotionVisualType[] = ["Vertical Bar", "Horizontal Bar"];
 const LINE_AREA: NotionVisualType[] = ["Line", "Area"];
-const MAP_COLOR: NotionVisualType[] = ["Arcs", "Discs", "Fences", "Heatmap", "Wind", "Points", "Areas"];
-const MAP_TOOLTIPS: NotionVisualType[] = ["Arcs", "Discs", "Fences", "Heatmap", "Pillars", "Points", "Areas"];
+const MAP_COLOR: NotionVisualType[] = ["Arcs", "Discs", "Fences", "Wind", "Points", "Areas"];
+const MAP_TOOLTIPS: NotionVisualType[] = ["Arcs", "Discs", "Fences", "Heatmap", "Water Surfaces", "Pillars", "Points", "Areas"];
 
 export const SUBCATEGORY_ORDER = [
   "Mapping",
@@ -200,8 +206,9 @@ export const SUBCATEGORY_ORDER = [
   "Marker Shape",
   "Marker appearance",
   "Heatmap Style",
-  "Bin & extrusion",
-  "Contour Terrain",
+  "Surface Style",
+  "3D height",
+  "Stems",
   "Extrusion",
   "Animation",
   "Zoom Scaling",
@@ -209,8 +216,6 @@ export const SUBCATEGORY_ORDER = [
   "Map Legend",
   "Flags",
 ] as const;
-
-type VisibleWhen = { group: string; name: string; is: string | string[] };
 
 type FieldDef = {
   name: string;
@@ -235,6 +240,18 @@ const f = (
   types: NotionVisualType[],
   extra: Omit<FieldDef, "name" | "control" | "subCategory" | "types"> = {},
 ): FieldDef => ({ name, control, subCategory, types, ...extra });
+
+const HEIGHT_ON = { group: "3D height", name: "Extrude", is: "true" };
+const HEATMAP_CELLS = { group: "Heatmap Style", name: "Mode", is: "Cells" as const };
+const HEATMAP_SOFT = { group: "Heatmap Style", name: "Mode", is: "Soft" as const };
+const HEATMAP_PARTICLES = { group: "Heatmap Style", name: "Mode", is: "Particles" as const };
+const CONTOURS_ON = { group: "Heatmap Style", name: "Show contours", is: "true" as const };
+const FADE_ON = { group: "Color", name: "Opacity from value", is: "true" };
+const VALUE_COLOR = { group: "Color", name: "Color Source", is: "Value" };
+const SURFACE_PLUME = { group: "Surface Style", name: "Mode", is: "Plume" as const };
+const SURFACE_SPILL = { group: "Surface Style", name: "Mode", is: "Spill" as const };
+const SURFACE_CURRENT = { group: "Surface Style", name: "Mode", is: "Current" as const };
+const SURFACE_TIMED = { group: "Surface Style", name: "Mode", is: ["Spill", "Current"] as string[] };
 
 const FIELDS: FieldDef[] = [
   /* ---- Mapping (shared + per type) ---- */
@@ -376,8 +393,28 @@ const FIELDS: FieldDef[] = [
   f("Geometry", "field", "Mapping", ["Areas"], { required: true }),
   f("Name", "field", "Mapping", ["Areas"]),
   f("Type", "field", "Mapping", ["Areas"]),
-  f("Coordinates", "field", "Mapping", ["Heatmap", "Wind"], { required: true }),
+  f("Coordinates", "field", "Mapping", ["Heatmap", "Wind", "Water Surfaces"], { required: true }),
   f("Intensity Value Field", "field", "Mapping", ["Heatmap"]),
+  f("Time field", "field", "Mapping", ["Heatmap"], {
+    desc: "Optional timestamp column. Mapping it turns on Animation.",
+  }),
+  f("Rows represent", "dropdown", "Mapping", ["Heatmap"], {
+    desc: "Decides how rows become cells. Colour and height use the same value.",
+    values: [
+      "Measurements (average per cell)",
+      "Events (count per cell)",
+      "Grid cells (use as-is)",
+    ],
+    defaultValue: "Measurements (average per cell)",
+  }),
+  f("Wind direction", "field", "Mapping", ["Heatmap"], {
+    desc: "Optional. Degrees; drives particle drift.",
+    visibleWhen: { group: "Heatmap Style", name: "Mode", is: "Particles" },
+  }),
+  f("Wind speed", "field", "Mapping", ["Heatmap"], {
+    desc: "Optional. m/s; scales particle drift.",
+    visibleWhen: { group: "Heatmap Style", name: "Mode", is: "Particles" },
+  }),
   f("U Component (Eastward)", "field", "Mapping", ["Wind"]),
   f("V Component (Northward)", "field", "Mapping", ["Wind"]),
   f("Aggregation", "dropdown", "Mapping", ["All Charts & KPIs"], {
@@ -733,31 +770,206 @@ const FIELDS: FieldDef[] = [
   }),
   f("Point Size", "slider", "Marker appearance", ["Points"], { desc: "0.2–8. Default 1.2." }),
   f("Marker size by data", "repeatable", "Marker appearance", ["Points"]),
-  f("Style", "segmented", "Heatmap Style", ["Heatmap"], {
-    values: ["Pond", "Grid", "Contour"],
-    defaultValue: "Pond",
+  /* ---- Heatmap ---- */
+  f("Mode", "segmented", "Heatmap Style", ["Heatmap"], {
+    desc: "Cells show each cell's exact value. Soft is a smoothed sheet. Particles is a drifting point field.",
+    values: ["Cells", "Soft", "Particles"],
+    defaultValue: "Cells",
   }),
-  f("Gradient fill", "toggle", "Bin & extrusion", ["Heatmap"], { def: false }),
-  f("3D extrusion", "toggle", "Bin & extrusion", ["Heatmap"]),
-  f("Elevation Scale", "slider", "Bin & extrusion", ["Heatmap"], { desc: "Default 500." }),
-  f("Color Aggregation", "dropdown", "Bin & extrusion", ["Heatmap"], {
-    values: ["SUM", "MEAN", "MAX", "MIN", "COUNT"],
-    defaultValue: "SUM",
+  f("Cell shape", "segmented", "Heatmap Style", ["Heatmap"], {
+    desc: "Hex cells hold the mean of the grid cells inside them.",
+    values: ["Square", "Hex"],
+    defaultValue: "Square",
+    visibleWhen: HEATMAP_CELLS,
   }),
-  f("Elevation Aggregation", "dropdown", "Bin & extrusion", ["Heatmap"], {
-    values: ["SUM", "MEAN", "MAX", "MIN", "COUNT"],
-    defaultValue: "SUM",
+  f("Hex size (cells)", "slider", "Heatmap Style", ["Heatmap"], {
+    desc: "1–8, step 0.25. Default 2.",
+    advanced: true,
+    visibleWhen: [HEATMAP_CELLS, { group: "Heatmap Style", name: "Cell shape", is: "Hex" }],
   }),
-  f("Coverage", "slider", "Bin & extrusion", ["Heatmap"], { desc: "0–1. Default 0.95." }),
-  f("Cell size", "slider", "Bin & extrusion", ["Heatmap"], { desc: "Default 1000." }),
-  f("Band width", "slider", "Contour Terrain", ["Heatmap"], { desc: "Default 0.06." }),
-  f("Contour aggregation", "dropdown", "Contour Terrain", ["Heatmap"], {
-    values: ["SUM", "MEAN", "MAX", "MIN", "COUNT"],
-    defaultValue: "SUM",
+  f("Coverage", "slider", "Heatmap Style", ["Heatmap"], {
+    desc: "0.3–1. Default 1. Below 1 leaves a gap between cells.",
+    advanced: true,
+    visibleWhen: HEATMAP_CELLS,
   }),
-  f("Cell Size (m)", "slider", "Contour Terrain", ["Heatmap"], { desc: "Default 1000." }),
-  f("Max Height", "slider", "Contour Terrain", ["Heatmap"], { desc: "Default 500." }),
-  f("Band count", "slider", "Contour Terrain", ["Heatmap"], { desc: "Default 8." }),
+  f("Show contours", "toggle", "Heatmap Style", ["Heatmap"], {
+    desc: "Lines at fixed value levels over the soft heatmap.",
+    def: false,
+    visibleWhen: HEATMAP_SOFT,
+  }),
+  f("Levels", "segmented", "Heatmap Style", ["Heatmap"], {
+    desc: "1-2-5 (1, 2, 5, 10, 20…) suits long-tailed readings.",
+    values: ["1-2-5 (log)", "Even steps"],
+    defaultValue: "1-2-5 (log)",
+    visibleWhen: [HEATMAP_SOFT, CONTOURS_ON],
+  }),
+  f("Step", "slider", "Heatmap Style", ["Heatmap"], {
+    desc: "0.5–100, step 0.5. Default 5. In value units.",
+    visibleWhen: [HEATMAP_SOFT, CONTOURS_ON, { group: "Heatmap Style", name: "Levels", is: "Even steps" }],
+  }),
+  f("Bold every", "slider", "Heatmap Style", ["Heatmap"], {
+    desc: "0–10. Default 5. 0 turns bold lines off.",
+    advanced: true,
+    visibleWhen: [HEATMAP_SOFT, CONTOURS_ON, { group: "Heatmap Style", name: "Levels", is: "Even steps" }],
+  }),
+  f("Line color", "dropdown", "Heatmap Style", ["Heatmap"], {
+    desc: "Auto darkens over light fill and lightens over dark fill.",
+    values: ["Auto", "Darker", "Lighter", "Custom"],
+    defaultValue: "Auto",
+    visibleWhen: [HEATMAP_SOFT, CONTOURS_ON],
+  }),
+  f("Custom color", "color", "Heatmap Style", ["Heatmap"], {
+    defaultValue: "#ffffffcc",
+    visibleWhen: [HEATMAP_SOFT, CONTOURS_ON, { group: "Heatmap Style", name: "Line color", is: "Custom" }],
+  }),
+  f("Line opacity", "slider", "Heatmap Style", ["Heatmap"], {
+    desc: "0–1. Default 0.7.",
+    visibleWhen: [HEATMAP_SOFT, CONTOURS_ON],
+  }),
+  f("Lines only", "toggle", "Heatmap Style", ["Heatmap"], {
+    desc: "Hide the fill so only the lines draw.",
+    def: false,
+    visibleWhen: [HEATMAP_SOFT, CONTOURS_ON],
+  }),
+  f("Width (px)", "slider", "Heatmap Style", ["Heatmap"], {
+    desc: "0.5–4 px, step 0.25. Default 1.5. Bold lines are 1.8× this.",
+    advanced: true,
+    visibleWhen: [HEATMAP_SOFT, CONTOURS_ON],
+  }),
+  f("Placement", "segmented", "Heatmap Style", ["Heatmap"], {
+    desc: "Flow scatters and drifts particles inside each cell. Locked sits them on a lattice.",
+    values: ["Flow", "Locked"],
+    defaultValue: "Flow",
+    visibleWhen: HEATMAP_PARTICLES,
+  }),
+  f("Particle size (m)", "slider", "Heatmap Style", ["Heatmap"], {
+    desc: "400–6000 m, step 100. Default 2400.",
+    visibleWhen: HEATMAP_PARTICLES,
+  }),
+  f("Size from intensity", "slider", "Heatmap Style", ["Heatmap"], {
+    desc: "0–1. Default 0.65.",
+    visibleWhen: HEATMAP_PARTICLES,
+  }),
+  f("Particles per cell", "slider", "Heatmap Style", ["Heatmap"], {
+    desc: "1–8. Default 4.",
+    advanced: true,
+    visibleWhen: HEATMAP_PARTICLES,
+  }),
+  f("Max particle size (px)", "slider", "Heatmap Style", ["Heatmap"], {
+    desc: "4–64 px. Default 28.",
+    advanced: true,
+    visibleWhen: HEATMAP_PARTICLES,
+  }),
+  f("Wind drift", "slider", "Heatmap Style", ["Heatmap"], {
+    desc: "0–2000 m per m/s of wind, step 10. Default 450. Needs the wind fields mapped.",
+    advanced: true,
+    visibleWhen: [HEATMAP_PARTICLES, { group: "Heatmap Style", name: "Placement", is: "Flow" }],
+  }),
+  f("Wind direction convention", "segmented", "Heatmap Style", ["Heatmap"], {
+    desc: "From is meteorological: the direction the wind blows from.",
+    values: ["From", "Toward"],
+    defaultValue: "From",
+    advanced: true,
+    visibleWhen: [HEATMAP_PARTICLES, { group: "Heatmap Style", name: "Placement", is: "Flow" }],
+  }),
+  f("Opacity", "slider", "Heatmap Style", ["Heatmap"], { desc: "0.05–1. Default 0.72." }),
+  f("Fill", "dropdown", "Heatmap Style", ["Heatmap"], {
+    desc: "Solid wash, or a repeating stroke pattern.",
+    values: ["Solid", "Diagonal", "Plus", "X", "Circle", "Dot"],
+    defaultValue: "Solid",
+    visibleWhen: { group: "Heatmap Style", name: "Mode", is: ["Cells", "Soft"] },
+  }),
+  f("Size from data", "toggle", "Heatmap Style", ["Heatmap"], {
+    desc: "Pattern strokes thicken with the value. Off draws every stroke at Max thickness.",
+    visibleWhen: [
+      { group: "Heatmap Style", name: "Fill", isNot: "Solid" },
+      { group: "Heatmap Style", name: "Mode", is: ["Cells", "Soft"] },
+    ],
+  }),
+  f("Pattern spacing (px)", "slider", "Heatmap Style", ["Heatmap"], {
+    desc: "3–28 px, step 0.5. Default 8.",
+    advanced: true,
+    visibleWhen: [
+      { group: "Heatmap Style", name: "Fill", isNot: "Solid" },
+      { group: "Heatmap Style", name: "Mode", is: ["Cells", "Soft"] },
+    ],
+  }),
+  f("Max thickness (px)", "slider", "Heatmap Style", ["Heatmap"], {
+    desc: "0.4–12 px, step 0.1. Default 3.",
+    advanced: true,
+    visibleWhen: [
+      { group: "Heatmap Style", name: "Fill", isNot: "Solid" },
+      { group: "Heatmap Style", name: "Mode", is: ["Cells", "Soft"] },
+    ],
+  }),
+  f("Cell size (m)", "slider", "Heatmap Style", ["Heatmap"], {
+    desc: "200–5000 m, step 50. Default 1000. Ignored when rows are already grid cells.",
+    advanced: true,
+  }),
+  f("Blur (cells)", "slider", "Heatmap Style", ["Heatmap"], {
+    desc: "0–4, step 0.05. Default 1.5.",
+    advanced: true,
+    visibleWhen: { group: "Heatmap Style", name: "Mode", is: ["Soft", "Particles"] },
+  }),
+  f("Extrude", "toggle", "3D height", ["Heatmap"], {
+    desc: "Raise cells into columns, the soft sheet into terrain, or particles into a cloud. Height shows intensity, not altitude.",
+    def: false,
+  }),
+  f("Max height (visual m)", "slider", "3D height", ["Heatmap"], {
+    desc: "1000–80000 m, step 500. Default 25000.",
+    visibleWhen: HEIGHT_ON,
+  }),
+  f("Height exponent", "slider", "3D height", ["Heatmap"], {
+    desc: "0.2–2. Default 0.65.",
+    advanced: true,
+    visibleWhen: [HEIGHT_ON, { group: "Heatmap Style", name: "Mode", is: "Particles" }],
+  }),
+  f("Turbulence", "slider", "3D height", ["Heatmap"], {
+    desc: "0–1. Default 0.22.",
+    advanced: true,
+    visibleWhen: [HEIGHT_ON, { group: "Heatmap Style", name: "Mode", is: "Particles" }],
+  }),
+  f("Palette", "color", "Color", ["Heatmap"], {
+    desc: "Stops sit at real values. Spacing and per-stop opacity replace percentile clipping and normalization.",
+    values: ["Gradient", "Steps"],
+    defaultValue: HEATMAP_DEFAULT_PALETTE,
+  }),
+  f("Opacity from value", "toggle", "Color", ["Heatmap", "Pillars"], {
+    desc: "Fade low values so the basemap shows through. Sets each stop's opacity; edit a stop to override it.",
+  }),
+  f("Fade strength", "slider", "Color", ["Heatmap", "Pillars"], {
+    desc: "0–1. Default 0.85.",
+    advanced: true,
+    visibleWhen: FADE_ON,
+  }),
+  f("Fade curve", "slider", "Color", ["Heatmap", "Pillars"], {
+    desc: "0.2–2. Default 0.8. Below 1 brightens low values sooner.",
+    advanced: true,
+    visibleWhen: FADE_ON,
+  }),
+  f("Opacity from value", "toggle", "Color", MAP_COLOR, {
+    desc: "Fade low values so the basemap shows through. Sets each stop's opacity; edit a stop to override it.",
+    visibleWhen: VALUE_COLOR,
+  }),
+  f("Fade strength", "slider", "Color", MAP_COLOR, {
+    desc: "0–1. Default 0.85.",
+    advanced: true,
+    visibleWhen: [FADE_ON, VALUE_COLOR],
+  }),
+  f("Fade curve", "slider", "Color", MAP_COLOR, {
+    desc: "0.2–2. Default 0.8. Below 1 brightens low values sooner.",
+    advanced: true,
+    visibleWhen: [FADE_ON, VALUE_COLOR],
+  }),
+  f("Clip outliers", "toggle", "Color", ["Heatmap"], {
+    desc: "Fit the data range to the 10th–99th percentile instead of min–max.",
+    advanced: true,
+  }),
+  f("Autoplay", "toggle", "Animation", ["Heatmap"], { desc: "Play through time when the asset loads." }),
+  f("Playback speed", "slider", "Animation", ["Heatmap"], {
+    desc: "0–6 hours per second, step 0.1. Default 1.",
+    advanced: true,
+  }),
   f("Extrusion mode", "segmented", "Extrusion", ["Areas"], {
     values: ["None", "Fixed height", "Data"],
   }),
@@ -777,15 +989,235 @@ const FIELDS: FieldDef[] = [
     desc: "0 = off.",
     def: false,
   }),
-  f("Falloff Rate", "slider", "Advanced", ["Heatmap"], { desc: "Default 0.2." }),
-  f("Sprites per Point", "slider", "Advanced", ["Heatmap"], { desc: "Default 1." }),
-  f("Size Multiplier", "slider", "Advanced", ["Heatmap"], { desc: "Default 1.0." }),
   f("Zoom scaling", "repeatable", "Zoom Scaling", ["All Map Layers"]),
   f("Show legend in Map Data", "toggle", "Map Legend", ["All Map Layers"]),
-  f("Tooltip content fields", "multi", "Tooltips", MAP_TOOLTIPS, {
+  f("Tooltip content fields", "multi", "Tooltips", MAP_TOOLTIPS.filter((t) => t !== "Heatmap" && t !== "Water Surfaces"), {
     desc: "Hover shows these mock-data columns: name, value, type, status.",
     values: ["name", "value", "type", "status"],
     defaultValue: ["name", "value", "type"],
+    visibleWhen: { group: "Tooltips", name: "Show tooltips", is: "true" },
+  }),
+  f("Tooltip content fields", "multi", "Tooltips", ["Heatmap"], {
+    desc: "Value under the cursor (smoothed in Soft), the raw cell value, the place name, and the time.",
+    values: ["value", "cell value", "place", "time"],
+    defaultValue: ["value", "cell value", "place"],
+    visibleWhen: { group: "Tooltips", name: "Show tooltips", is: "true" },
+  }),
+
+  /* ---- Water Surfaces ---- */
+  f("Value", "field", "Mapping", ["Water Surfaces"], {
+    desc: "Discharge or size. Drives stem height, and radius when Radius from value is on.",
+    visibleWhen: SURFACE_PLUME,
+  }),
+  f("Time field", "field", "Mapping", ["Water Surfaces"], {
+    desc: "Timestamp column. The time series component plays Spill and Current back.",
+    visibleWhen: SURFACE_TIMED,
+  }),
+  f("Particle ID", "field", "Mapping", ["Water Surfaces"], {
+    desc: "Groups positions that belong to the same slick particle.",
+    visibleWhen: SURFACE_SPILL,
+  }),
+  f("U component", "field", "Mapping", ["Water Surfaces"], {
+    desc: "Eastward flow.",
+    visibleWhen: SURFACE_CURRENT,
+  }),
+  f("V component", "field", "Mapping", ["Water Surfaces"], {
+    desc: "Northward flow.",
+    visibleWhen: SURFACE_CURRENT,
+  }),
+  f("Speed", "field", "Mapping", ["Water Surfaces"], {
+    desc: "Alternative to U and V, paired with Direction.",
+    advanced: true,
+    visibleWhen: SURFACE_CURRENT,
+  }),
+  f("Direction", "field", "Mapping", ["Water Surfaces"], {
+    desc: "Degrees clockwise from north, toward the flow. Oceanographic convention.",
+    advanced: true,
+    visibleWhen: SURFACE_CURRENT,
+  }),
+  f("Mode", "segmented", "Surface Style", ["Water Surfaces"], {
+    desc: "Plume is a discharge source. Spill is an oil slick over time. Current is a flow field.",
+    values: ["Plume", "Spill", "Current"],
+    defaultValue: "Plume",
+  }),
+  f("Radius", "slider", "Surface Style", ["Water Surfaces"], {
+    desc: "20–2000 m, step 5. Default 275.",
+    visibleWhen: SURFACE_PLUME,
+  }),
+  f("Radius from value", "toggle", "Surface Style", ["Water Surfaces"], {
+    desc: "Scale the radius by the mapped value.",
+    def: true,
+    visibleWhen: SURFACE_PLUME,
+  }),
+  f("Distortion", "slider", "Surface Style", ["Water Surfaces"], {
+    desc: "0–120 m, step 1. Default 62.",
+    visibleWhen: SURFACE_PLUME,
+  }),
+  f("Drift speed", "slider", "Surface Style", ["Water Surfaces"], {
+    desc: "0–2, step 0.01. Default 0.02. Scrolls the plume noise. 0 is static.",
+    advanced: true,
+    visibleWhen: SURFACE_PLUME,
+  }),
+  f("Noise scale", "slider", "Surface Style", ["Water Surfaces"], {
+    desc: "0.001–0.08, step 0.001. Default 0.02.",
+    advanced: true,
+    visibleWhen: SURFACE_PLUME,
+  }),
+  f("Octaves", "slider", "Surface Style", ["Water Surfaces"], {
+    desc: "1–8, step 1. Default 3.",
+    advanced: true,
+    visibleWhen: SURFACE_PLUME,
+  }),
+  f("Show pathway", "toggle", "Surface Style", ["Water Surfaces"], {
+    desc: "Draw the slick centreline.",
+    def: true,
+    visibleWhen: SURFACE_SPILL,
+  }),
+  f("Cohesion", "slider", "Surface Style", ["Water Surfaces"], {
+    desc: "200–4000 m, step 50. Default 900.",
+    advanced: true,
+    visibleWhen: SURFACE_SPILL,
+  }),
+  f("Rim sheen", "toggle", "Surface Style", ["Water Surfaces"], {
+    desc: "Rainbow on the edge, fill color in the body.",
+    advanced: true,
+    def: true,
+    visibleWhen: SURFACE_SPILL,
+  }),
+  f("Animate sheen", "toggle", "Surface Style", ["Water Surfaces"], {
+    desc: "Cycle the thin-film colour. Runs on its own clock, not the time series.",
+    advanced: true,
+    def: true,
+    visibleWhen: SURFACE_SPILL,
+  }),
+  f("Sheen speed", "slider", "Surface Style", ["Water Surfaces"], {
+    desc: "0–4, step 0.05. Default 1.",
+    advanced: true,
+    visibleWhen: [SURFACE_SPILL, { group: "Surface Style", name: "Animate sheen", is: "true" }],
+  }),
+  f("Trail streaks", "slider", "Surface Style", ["Water Surfaces"], {
+    desc: "0–1, step 0.01. Default 0.8.",
+    advanced: true,
+    visibleWhen: SURFACE_SPILL,
+  }),
+  f("Trail strength", "slider", "Surface Style", ["Water Surfaces"], {
+    desc: "0–1, step 0.01. Default 0.85.",
+    advanced: true,
+    visibleWhen: SURFACE_SPILL,
+  }),
+  f("Residual sheen", "slider", "Surface Style", ["Water Surfaces"], {
+    desc: "0–0.6, step 0.01. Default 0.30.",
+    advanced: true,
+    visibleWhen: SURFACE_SPILL,
+  }),
+  f("Pathway opacity", "slider", "Surface Style", ["Water Surfaces"], {
+    desc: "0–1, step 0.01. Default 0.45.",
+    advanced: true,
+    visibleWhen: [SURFACE_SPILL, { group: "Surface Style", name: "Show pathway", is: "true" }],
+  }),
+  f("Brightness", "slider", "Surface Style", ["Water Surfaces"], {
+    desc: "0–2.5, step 0.01. Default 2.5.",
+    advanced: true,
+    visibleWhen: SURFACE_SPILL,
+  }),
+  f("Saturation", "slider", "Surface Style", ["Water Surfaces"], {
+    desc: "0–2, step 0.01. Default 2.",
+    advanced: true,
+    visibleWhen: SURFACE_SPILL,
+  }),
+  f("Animation speed", "slider", "Surface Style", ["Water Surfaces"], {
+    desc: "0.05–2, step 0.05. Default 0.75. How fast particles move through the field.",
+    advanced: true,
+    visibleWhen: SURFACE_CURRENT,
+  }),
+  f("Trail length", "slider", "Surface Style", ["Water Surfaces"], {
+    desc: "0.90–0.999, step 0.001. Default 0.999.",
+    advanced: true,
+    visibleWhen: SURFACE_CURRENT,
+  }),
+  f("Particle density", "slider", "Surface Style", ["Water Surfaces"], {
+    desc: "4096–294912, step 4096. Default 294912.",
+    advanced: true,
+    visibleWhen: SURFACE_CURRENT,
+  }),
+  f("Reset rate", "slider", "Surface Style", ["Water Surfaces"], {
+    desc: "0.002–0.05, step 0.001. Default 0.011.",
+    advanced: true,
+    visibleWhen: SURFACE_CURRENT,
+  }),
+  f("Particle size", "slider", "Surface Style", ["Water Surfaces"], {
+    desc: "0.5–6, step 0.1. Default 1.4.",
+    advanced: true,
+    visibleWhen: SURFACE_CURRENT,
+  }),
+  f("Opacity", "slider", "Surface Style", ["Water Surfaces"], {
+    desc: "0.05–1, step 0.01. Default 1. Current starts at 0.30 until this moves.",
+  }),
+  f("Show stems", "toggle", "Stems", ["Water Surfaces"], {
+    desc: "A line rising from the plume, or from the slick.",
+    def: true,
+  }),
+  f("Max height", "slider", "Stems", ["Water Surfaces"], {
+    desc: "1000–120000 m, step 1000. Default 42000. Spill starts at 24000 until this moves.",
+  }),
+  f("Stem color", "dropdown", "Stems", ["Water Surfaces"], {
+    desc: "Auto uses the plume color, or alert red for a spill.",
+    values: ["Auto", "Custom"],
+    defaultValue: "Auto",
+  }),
+  f("Custom color", "color", "Stems", ["Water Surfaces"], {
+    defaultValue: "#ff2b2b",
+    visibleWhen: { group: "Stems", name: "Stem color", is: "Custom" },
+  }),
+  f("Min height", "slider", "Stems", ["Water Surfaces"], {
+    desc: "500–40000 m, step 500. Default 8000. Plume only: the smallest value.",
+    advanced: true,
+    visibleWhen: SURFACE_PLUME,
+  }),
+  f("Width", "slider", "Stems", ["Water Surfaces"], {
+    desc: "0.8–8 px, step 0.1. Default 2.4.",
+    advanced: true,
+  }),
+  f("Fade start zoom", "slider", "Stems", ["Water Surfaces"], {
+    desc: "3–16, step 0.1. Default 9. Spill starts at 7 until this moves.",
+    advanced: true,
+  }),
+  f("Hidden by zoom", "slider", "Stems", ["Water Surfaces"], {
+    desc: "5–18, step 0.1. Default 12.5. Spill starts at 9.5 until this moves.",
+    advanced: true,
+  }),
+  f("Palette", "color", "Color", ["Water Surfaces"], {
+    desc: "Solid, a gradient, or steps. For a spill this is the slick body; the rim keeps the thin-film sheen.",
+    values: ["Single", "Gradient", "Steps"],
+    defaultValue: WATER_PLUME_PALETTE,
+  }),
+  f("Color by", "field", "Color", ["Water Surfaces"], {
+    desc: "Column that drives a gradient or steps. Solid color ignores it.",
+    visibleWhen: { group: "Surface Style", name: "Mode", isNot: "Spill" },
+  }),
+  f("Opacity from value", "toggle", "Color", ["Water Surfaces"], {
+    desc: "Fade low values so the basemap shows through. Sets each stop's opacity; edit a stop to override it.",
+    visibleWhen: { group: "Surface Style", name: "Mode", isNot: "Spill" },
+  }),
+  f("Fade strength", "slider", "Color", ["Water Surfaces"], {
+    desc: "0–1. Default 0.85.",
+    advanced: true,
+    visibleWhen: [FADE_ON, { group: "Surface Style", name: "Mode", isNot: "Spill" }],
+  }),
+  f("Fade curve", "slider", "Color", ["Water Surfaces"], {
+    desc: "0.2–2. Default 0.8. Below 1 brightens low values sooner.",
+    advanced: true,
+    visibleWhen: [FADE_ON, { group: "Surface Style", name: "Mode", isNot: "Spill" }],
+  }),
+  f("Clip outliers", "toggle", "Color", ["Water Surfaces"], {
+    desc: "Fit the data range to the 10th–99th percentile instead of min–max.",
+    advanced: true,
+    visibleWhen: { group: "Surface Style", name: "Mode", isNot: "Spill" },
+  }),
+  f("Tooltip content fields", "multi", "Tooltips", ["Water Surfaces"], {
+    desc: "Plume uses name and value. Spill uses time and thickness. Current uses speed and direction.",
+    values: ["name", "value", "time", "thickness", "speed", "direction"],
+    defaultValue: ["name", "value"],
     visibleWhen: { group: "Tooltips", name: "Show tooltips", is: "true" },
   }),
 
@@ -1390,6 +1822,12 @@ const COLOR_PICKER_PROFILES: Record<string, VisualColorPickerProfile> = {
     autoValueFields: ["Intensity Value Field", "Value"],
     categoryFallback: "category",
   },
+  "water-surfaces": {
+    modes: VALUE_PICKER_MODES,
+    autoCategoryFields: ["Coordinates"],
+    autoValueFields: ["Color by", "Value"],
+    categoryFallback: "category",
+  },
   wind: {
     modes: ALL_PICKER_MODES,
     autoCategoryFields: ["Coordinates"],
@@ -1464,8 +1902,7 @@ export const SETTINGS_NAV_CORE = [
   "Marker Shape",
   "Marker appearance",
   "Heatmap Style",
-  "Bin & extrusion",
-  "Contour Terrain",
+  "Surface Style",
   "Extrusion",
 ] as const;
 
@@ -1478,6 +1915,8 @@ export const FEATURE_TAB_MASTERS: Record<string, string> = {
   "Disc ring": "Show endpoint discs",
   "Map Legend": "Show legend in Map Data",
   Height: "Height Exaggeration",
+  "3D height": "Extrude",
+  Stems: "Show stems",
 };
 
 function isToggleOn(value: unknown): boolean {
@@ -1501,9 +1940,31 @@ export type SettingsNavSection = {
   tabs: string[];
 };
 
-export function settingsNavSections(visualId: string): SettingsNavSection[] {
+/** Tabs that only apply while another setting has a given value. */
+export const TAB_VISIBLE_WHEN: Partial<Record<string, Partial<Record<NotionVisualType, VisibleWhen>>>> = {
+  Animation: { Heatmap: { group: "Mapping", name: "Time field", isNot: "" } },
+  Stems: { "Water Surfaces": { group: "Surface Style", name: "Mode", isNot: "Current" } },
+};
+
+export function isTabVisible(
+  visualId: string,
+  tab: string,
+  getValByKey?: (group: string, name: string) => unknown,
+): boolean {
+  const notionType = NOTION_TYPE_BY_VISUAL_ID[visualId];
+  const rule = notionType ? TAB_VISIBLE_WHEN[tab]?.[notionType] : undefined;
+  if (!rule || !getValByKey) return true;
+  return conditionsMatch(rule, getValByKey);
+}
+
+export function settingsNavSections(
+  visualId: string,
+  getValByKey?: (group: string, name: string) => unknown,
+): SettingsNavSection[] {
   const fields = fieldsForVisual(visualId);
-  const tabs = subCategoriesForVisual(visualId);
+  const tabs = subCategoriesForVisual(visualId).filter((tab) =>
+    isTabVisible(visualId, tab, getValByKey),
+  );
   const coreSet = new Set<string>(SETTINGS_NAV_CORE);
   const core = tabs.filter((name) => coreSet.has(name));
   const extra = tabs.filter((name) => !coreSet.has(name));
@@ -1535,8 +1996,21 @@ export function isFieldVisible(o: Opt, getValByKey: (group: string, name: string
       return false;
     }
   }
-  if (!o.visibleWhen) return true;
-  const current = String(getValByKey(o.visibleWhen.group, o.visibleWhen.name) ?? "");
-  const expected = o.visibleWhen.is;
-  return Array.isArray(expected) ? expected.includes(current) : current === expected;
+  return conditionsMatch(o.visibleWhen, getValByKey);
+}
+
+function conditionMatches(
+  c: VisibleWhenCondition,
+  getValByKey: (group: string, name: string) => unknown,
+): boolean {
+  const current = String(getValByKey(c.group, c.name) ?? "");
+  const listed = (v: string | string[]) => (Array.isArray(v) ? v.includes(current) : current === v);
+  return "is" in c ? listed(c.is) : !listed(c.isNot);
+}
+
+function conditionsMatch(
+  v: VisibleWhen | undefined,
+  getValByKey: (group: string, name: string) => unknown,
+): boolean {
+  return visibleWhenConditions(v).every((c) => conditionMatches(c, getValByKey));
 }

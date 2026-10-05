@@ -89,6 +89,11 @@ function buildRows(): MockRow[] {
         destination: dest,
         geometry: `${place.district} polygon`,
         coordinates: `${place.district} point`,
+        u: Number((Math.sin(di + mi) * 0.45).toFixed(2)),
+        v: Number((Math.cos(di * 0.7) * 0.35).toFixed(2)),
+        particle_id: `spill-${(di % 3) + 1}`,
+        thickness: Number((0.4 + incidents * 0.12).toFixed(2)),
+        bearing: (di * 60 + mi * 20) % 360,
       });
     });
   });
@@ -122,6 +127,11 @@ export const MOCK_DATASET: MockDataset = {
     { name: "destination", label: "Destination", type: "string" },
     { name: "geometry", label: "Geometry", type: "geometry" },
     { name: "coordinates", label: "Coordinates", type: "geometry" },
+    { name: "u", label: "U component", type: "number" },
+    { name: "v", label: "V component", type: "number" },
+    { name: "particle_id", label: "Particle", type: "string" },
+    { name: "thickness", label: "Thickness", type: "number" },
+    { name: "bearing", label: "Bearing", type: "number" },
   ],
   rows: buildRows(),
 };
@@ -171,6 +181,11 @@ const NUMERIC_FIELDS = new Set([
   "Intensity Value Field",
   "U Component (Eastward)",
   "V Component (Northward)",
+  "U component",
+  "V component",
+  "Speed",
+  "Color by",
+  "Thickness",
   "KPI value field",
   "KPI min value field",
   "KPI max value field",
@@ -254,6 +269,33 @@ export function numericExtent(column: string, dataset: MockDataset = MOCK_DATASE
   if (min === max) return { min, max: min + 1 };
   const intLike = Math.abs(min - Math.round(min)) < 1e-6 && Math.abs(max - Math.round(max)) < 1e-6;
   return intLike ? { min: Math.round(min), max: Math.round(max) } : { min: Number(min.toFixed(2)), max: Number(max.toFixed(2)) };
+}
+
+/** Range between two percentiles (0–100) of a numeric column. */
+export function numericPercentileExtent(
+  column: string,
+  lower: number,
+  upper: number,
+  dataset: MockDataset = MOCK_DATASET,
+): { min: number; max: number } | null {
+  const values = dataset.rows
+    .map((row) => {
+      const raw = row[column];
+      return typeof raw === "number" ? raw : Number(String(raw ?? "").replace(/[^\d.-]/g, ""));
+    })
+    .filter(Number.isFinite)
+    .sort((a, b) => a - b);
+  if (values.length < 2) return numericExtent(column, dataset);
+  const at = (p: number) => {
+    const i = (p / 100) * (values.length - 1);
+    const lo = Math.floor(i);
+    return values[lo] + (values[Math.min(lo + 1, values.length - 1)] - values[lo]) * (i - lo);
+  };
+  const min = at(lower);
+  const max = at(upper);
+  if (!(max > min)) return numericExtent(column, dataset);
+  const round = (n: number) => (Math.abs(max - min) >= 10 ? Math.round(n) : Number(n.toFixed(2)));
+  return { min: round(min), max: round(max) };
 }
 
 export function allColumnNames(dataset: MockDataset = MOCK_DATASET): string[] {

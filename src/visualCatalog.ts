@@ -195,6 +195,13 @@ export const VISUAL_TYPES: VisualType[] = [
     chartId: "line",
     category: "map-layer",
   },
+  {
+    id: "water-surfaces",
+    label: "Water Surfaces",
+    description: "Liquids on water: discharge plumes, oil spills, and currents.",
+    chartId: "area",
+    category: "map-layer",
+  },
 ];
 
 export function visualTypesForCategory(categoryId: VisualCategoryId): VisualType[] {

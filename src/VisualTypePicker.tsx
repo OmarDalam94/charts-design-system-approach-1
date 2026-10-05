@@ -39,7 +39,7 @@ function VisualCard({
         <VisualArtwork
           visualId={visual.id}
           category={visual.category}
-          size={visual.category === "map-layer" ? "map" : "card"}
+          size="stack"
         />
       </span>
       <span className="viz-type-card__body">
