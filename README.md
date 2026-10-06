@@ -2,7 +2,9 @@
 
 A React prototype for creating and editing data visualization **assets** in the Llumen platform. The experience centers on a full-screen **Edit Asset** modal: a six-step wizard, a schema-driven settings panel, and a live preview that actually responds to mapping, color, layout, and tooltip settings.
 
-Click **Create** (or any row in the Assets table) to open the flow.
+The home page is the **Chart System Lab**. The Asset Builder is at `#/asset-builder` (the **Asset Builder** button in the Lab header); click **Create** or any row in the Assets table to open the flow.
+
+Live site: https://omardalam94.github.io/charts-design-system-approach-1/
 
 ## Quick start
 
@@ -11,7 +13,7 @@ npm install
 npm run dev
 ```
 
-Open the local Vite URL (default `http://localhost:5173`).
+Open http://localhost:5173/charts-design-system-approach-1/.
 
 ```bash
 npm run build   # production build
@@ -20,7 +22,7 @@ npm run preview # preview the production build
 
 ## Chart system and Chart System Lab
 
-Chart previews are drawn by the Llumen chart system in `src/charts/`. The **Chart System Lab** (left nav, or `npm run lab`, route `#/chart-lab`) documents and tests every chart asset with live controls, scenarios, behavior rules, data editing and property coverage. The Lab and the Edit Asset preview use the same renderer.
+Chart previews are drawn by the Llumen chart system in `src/charts/`. The **Chart System Lab** (home page, `#/chart-lab`, or `npm run lab`) documents and tests every chart asset with live controls, scenarios, behavior rules, data editing and property coverage. The Lab and the Edit Asset preview use the same renderer.
 
 ```bash
 npm run lab              # open the Lab

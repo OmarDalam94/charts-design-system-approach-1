@@ -22,6 +22,7 @@ import {
   WIDTH_PRESETS,
   type LabTab,
 } from "./labState";
+import { BUILDER_ROUTE } from "./route";
 
 const NAV_GROUPS: { label: string; ids: string[] }[] = [
   { label: "Cartesian", ids: ["line-chart", "area-chart", "vertical-bar", "horizontal-bar", "scatter-plot", "range"] },
@@ -286,8 +287,8 @@ export default function ChartLab() {
   return (
     <div className="lab" data-reduced-motion={env.reducedMotion || undefined} data-testid="chart-lab">
       <header className="lab-header">
-        <a className="lab-btn lab-btn--ghost" href="#/">
-          ← Assets
+        <a className="lab-btn lab-btn--ghost" href={BUILDER_ROUTE}>
+          Asset Builder
         </a>
         <button type="button" className="lab-btn lab-only-narrow" onClick={() => setNavOpen(true)} aria-haspopup="dialog">
           Assets list

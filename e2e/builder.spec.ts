@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 
 test.describe("Asset Builder uses the Llumen chart system", () => {
   test("edit preview renders LlumenChart, discloses suggestions and follows real mappings", async ({ page }) => {
-    await page.goto("./");
+    await page.goto("./#/asset-builder");
     await page.getByRole("button", { name: /Registration Completion Rate/ }).click();
     const card = page.locator(".chart-card--native");
     await expect(card.locator(".lc-chart")).toBeVisible();

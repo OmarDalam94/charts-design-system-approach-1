@@ -17,11 +17,12 @@ Requirements: Node 20+ and npm. The repository is a Vite app served under `/char
 
 ```bash
 npm install
-npm run dev        # Asset Builder at http://localhost:5173/charts-design-system-approach-1/
-npm run lab        # same server, opens the Lab at #/chart-lab
+npm run dev        # Lab at http://localhost:5173/charts-design-system-approach-1/
+                   # Asset Builder at .../#/asset-builder
+npm run lab        # same server, opens the Lab directly
 ```
 
-The Lab is also linked from the left navigation (**Chart System Lab**). Any scenario opens directly with `#/chart-lab?s=id:<scenario-id>`, for example `#/chart-lab?s=id:line-chart:compound-50-legend`. Edited scenarios are encoded into the URL (**Copy link**) when they fit in 1,800 characters; otherwise use **Export JSON** / **Import JSON**. **Save locally** keeps presets in this browser's `localStorage` only.
+The Lab is the home page and is also linked from the Asset Builder's left navigation (**Chart System Lab**); the Lab header links back to the Asset Builder. Any scenario opens directly with `#/chart-lab?s=id:<scenario-id>`, for example `#/chart-lab?s=id:line-chart:compound-50-legend`. Edited scenarios are encoded into the URL (**Copy link**) when they fit in 1,800 characters; otherwise use **Export JSON** / **Import JSON**. **Save locally** keeps presets in this browser's `localStorage` only.
 
 ### Tests and reports
 

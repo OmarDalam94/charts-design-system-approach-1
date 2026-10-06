@@ -291,3 +291,13 @@ test.describe("documentation screenshots", () => {
     await page.screenshot({ path: `${dir}/lab-data-invalid.png` });
   });
 });
+
+test("the site root opens the Lab, which links to the Asset Builder and back", async ({ page }) => {
+  await page.goto("./");
+  await expect(page.getByTestId("chart-lab")).toBeVisible();
+  await page.getByRole("link", { name: "Asset Builder" }).click();
+  await expect(page).toHaveURL(/#\/asset-builder$/);
+  await expect(page.getByTestId("chart-lab")).toHaveCount(0);
+  await page.getByRole("link", { name: "Chart System Lab" }).click();
+  await expect(page.getByTestId("chart-lab")).toBeVisible();
+});

@@ -9,7 +9,7 @@ import {
   InfoIcon,
   Glyph,
 } from "./icons";
-import { isLabHash, LAB_ROUTE } from "./lab/route";
+import { isBuilderHash, LAB_ROUTE } from "./lab/route";
 
 const ChartLab = lazy(() => import("./lab/ChartLab"));
 
@@ -68,7 +68,7 @@ export default function App() {
     setEditModalOpen(true);
   };
 
-  if (isLabHash(hash)) {
+  if (!isBuilderHash(hash)) {
     return (
       <Suspense fallback={<div className="app" role="status">Loading Chart System Lab…</div>}>
         <ChartLab />
