@@ -62,13 +62,17 @@ export default function App() {
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [draftComponent, setDraftComponent] = useState<{ name: string } | null>(null);
   const hash = useHash();
+  const builder = isBuilderHash(hash);
+  useEffect(() => {
+    document.title = builder ? "Lumen — Asset Builder" : "Llumen Chart Design System";
+  }, [builder]);
 
   const openEditModal = (draft?: { name: string } | null) => {
     setDraftComponent(draft ?? null);
     setEditModalOpen(true);
   };
 
-  if (!isBuilderHash(hash)) {
+  if (!builder) {
     return (
       <Suspense fallback={<div className="app" role="status">Loading Chart System Lab…</div>}>
         <ChartLab />
