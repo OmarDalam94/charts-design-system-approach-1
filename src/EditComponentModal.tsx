@@ -1,5 +1,6 @@
 import {
   Fragment,
+  useContext,
   useState,
   useRef,
   useCallback,
@@ -55,6 +56,7 @@ import {
   subCategoriesForVisual,
 } from "./visualSettingsCatalog";
 import ChartPreview from "./ChartPreview";
+import { BuilderChart, isNativeChart } from "./charts/BuilderChart";
 import DataSourceQueryPreview from "./DataSourceQueryPreview";
 import DataSourceDataProfile from "./DataSourceDataProfile";
 import ColorPalette, {
@@ -70,19 +72,13 @@ import PhosphorIconPicker from "./PhosphorIconPicker";
 import { derivePreviewSeries, mappedMeasureColumn } from "./derivePreviewSeries";
 import { heatmapSettings, valueFade } from "./heatmapSettings";
 import { waterSurfaceSettings } from "./waterSurfaceSettings";
-import { WATER_CURRENT_PALETTE, WATER_PLUME_PALETTE, WATER_SPILL_PALETTE } from "./waterPalettes";
+import { FieldOptionsContext } from "./fieldOptionsContext";
 import {
-  allColumnNames,
-  fieldOptionsFor,
   numericExtent,
   numericPercentileExtent,
-  uniqueValues,
 } from "./mockDataset";
 import {
   DEFAULT_COLOR_MODE,
-  DEFAULT_GRADIENT,
-  DEFAULT_REPEATABLE,
-  DEFAULT_ZOOM_SCALING,
   asColorMode,
   expandPaletteToCount,
   asGradient,
@@ -100,6 +96,23 @@ import FiltersStep from "./FiltersStep";
 import DeepDiveStep from "./DeepDiveStep";
 import AccessStep from "./AccessStep";
 import GeneralInfoStep, { type GeneralInfo } from "./GeneralInfoStep";
+import {
+  defaultColorList,
+  defaultFor,
+  isMultiToggle,
+  isPaletteField,
+  isValueFilled,
+  isZoomScalingField,
+  keyOf,
+  multiChoices,
+  resolveConfigDefaults,
+  resolveFieldValue,
+  sliderDisplay,
+  sliderScale,
+  sliderValue,
+  type Config,
+  type MarginsValue,
+} from "./settingsDefaults";
 import VisualTypePicker from "./VisualTypePicker";
 import SelectedVisualBar from "./SelectedVisualBar";
 import { visualTypeByChartId, visualTypeById } from "./visualCatalog";
@@ -207,15 +220,6 @@ type WizardStepperDesign = "rail" | "legacy";
 const WIZARD_STEPPER_DESIGN = "rail" as WizardStepperDesign;
 const legacyStepper = WIZARD_STEPPER_DESIGN === "legacy";
 
-function isValueFilled(o: Opt, value: unknown): boolean {
-  if (o.type === "toggle") return true;
-  if (Array.isArray(value)) return value.length > 0;
-  if (typeof value === "string") return value.trim().length > 0;
-  if (typeof value === "number") return !Number.isNaN(value);
-  if (value && typeof value === "object") return Object.keys(value as object).length > 0;
-  return value !== undefined && value !== null && value !== "";
-}
-
 function isOptSatisfied(o: Opt, getVal: (o: Opt) => unknown): boolean {
   if (o.level !== "required") return true;
   return isValueFilled(o, getVal(o));
@@ -242,11 +246,7 @@ function wizardStepState(index: number, currentStep: number, maxUnlockedStep: nu
   return "active";
 }
 
-const SAMPLE_COLUMNS = allColumnNames();
-
 /* config keys & defaults ------------------------------------------------ */
-type Config = Record<string, unknown>;
-const keyOf = (o: Opt) => `${o.group}::${o.name}`;
 
 function withPaletteCardinalityEdgeCase(
   series: PreviewSeries,
@@ -344,28 +344,6 @@ function withPaletteCardinalityEdgeCase(
   return next;
 }
 
-/** Former Area styling fields now live under Colors; keep old keys readable. */
-const LEGACY_SETTING_KEYS: Record<string, string> = {
-  "Colors::Line + Area colors": "Area styling::Line + Area colors",
-  "Colors::Fill opacity": "Area styling::Fill opacity",
-};
-
-type MarginsValue = {
-  top: number;
-  right: number;
-  bottom: number;
-  left: number;
-  locked: boolean;
-};
-
-const defaultMargins = (): MarginsValue => ({
-  top: 0,
-  right: 0,
-  bottom: 0,
-  left: 0,
-  locked: true,
-});
-
 function parseMargins(v: unknown): MarginsValue {
   if (v && typeof v === "object" && "top" in v && "locked" in v) {
     const m = v as MarginsValue;
@@ -399,194 +377,22 @@ function isMinMaxNumber(o: Opt) {
   return n.includes("min/max") || (n.includes("range") && n.includes("min"));
 }
 
-function isMultiToggle(o: Opt, values: string[]) {
-  return (
-    o.name.toLowerCase().includes("show") ||
-    o.name.toLowerCase() === "content" ||
-    values.some((v) => v.toLowerCase().startsWith("show "))
-  );
-}
-
-function multiChoices(o: Opt): string[] {
-  return o.name === "Visible columns" ? SAMPLE_COLUMNS : o.values.length ? o.values : ["Field A", "Field B", "Field C"];
-}
-
-function defaultMulti(o: Opt): string[] {
-  const values = multiChoices(o);
-  if (isMultiToggle(o, values)) return [...values];
-  if (o.name === "Visible columns") return [];
-  return values.slice(0, Math.min(3, values.length));
-}
-
-function defaultColorList(o: Opt): Record<string, string> {
-  const pal = ["#3FA7A0", "#73adf5", "#c6a7ff", "#ffd58a", "#f0888c", "#7ee0c0"];
-  const n = o.name.toLowerCase();
-  const keys = n.includes("status")
-    ? uniqueValues("status")
-    : n.includes("icon")
-      ? uniqueValues("category")
-      : uniqueValues("category");
-  return Object.fromEntries(keys.map((k, i) => [k, pal[i % pal.length]]));
-}
-
-function isPaletteField(o: Opt): boolean {
-  return o.type === "color" && o.name === "Palette" && (o.group === "Colors" || o.group === "Color");
-}
-
-function defaultSlider(o: Opt): number {
-  const n = o.name.toLowerCase();
-  if (n.includes("top n")) return 100;
-  const range = o.desc.match(/(-?\d*\.?\d+)\s*[–—-]\s*(-?\d*\.?\d+)/);
-  const def = o.desc.match(/Default\s+([\d.]+)/i);
-  if (range && def) {
-    const lo = parseFloat(range[1]);
-    const hi = parseFloat(range[2]);
-    const v = parseFloat(def[1]);
-    if (hi !== lo) return Math.round(((v - lo) / (hi - lo)) * 100);
-  }
-  if (n.includes("opacity")) return 40;
-  return 50;
-}
-
-function isZoomScalingField(o: Opt) {
-  return (
-    /zoom scaling/i.test(o.name) ||
-    o.name === "Disc scaling" ||
-    (o.group === "Extrusion" && o.name === "Data range")
-  );
-}
-
-function isUntouchedPlumePalette(value: unknown): boolean {
-  if (!value || typeof value !== "object") return false;
-  const palette = value as { style?: string; color?: string; paletteName?: string };
-  return (
-    palette.paletteName === WATER_PLUME_PALETTE.paletteName &&
-    palette.style === WATER_PLUME_PALETTE.style &&
-    palette.color?.toLowerCase() === WATER_PLUME_PALETTE.color.toLowerCase()
-  );
-}
-
-function sliderPercentFor(o: Opt, value: number): number {
-  const range = (o.desc ?? "").match(/(-?\d*\.?\d+)\s*[–—-]\s*(-?\d*\.?\d+)/);
-  const lo = range ? parseFloat(range[1]) : 0;
-  const hi = range ? parseFloat(range[2]) : 100;
-  if (hi === lo) return 0;
-  return Math.round(((value - lo) / (hi - lo)) * 100);
-}
-
-/** Unset Water Surfaces fields use the Plume catalog default. Spill and Current swap in their own until the control is moved. */
-function waterSurfaceModeDefault(visualId: string, mode: unknown, o: Opt): unknown {
-  if (visualId !== "water-surfaces") return undefined;
-  if (mode === "Current" && o.group === "Surface Style" && o.name === "Opacity") return sliderPercentFor(o, 0.3);
-  if (mode === "Spill" && o.group === "Stems" && o.name === "Max height") return sliderPercentFor(o, 24000);
-  if (mode === "Spill" && o.group === "Stems" && o.name === "Fade start zoom") return sliderPercentFor(o, 7);
-  if (mode === "Spill" && o.group === "Stems" && o.name === "Hidden by zoom") return sliderPercentFor(o, 9.5);
-  if (mode === "Current" && o.group === "Color" && o.name === "Palette") return WATER_CURRENT_PALETTE;
-  if (mode === "Spill" && o.group === "Color" && o.name === "Palette") return WATER_SPILL_PALETTE;
-  return undefined;
-}
-
-function defaultFor(o: Opt, visualId?: string): unknown {
-  if (o.defaultValue !== undefined) return o.defaultValue;
-  switch (o.type) {
-    case "toggle":
-      return o.def !== false;
-    case "segmented":
-      return o.values[0] ?? "";
-    case "posgrid":
-      return "top-left";
-    case "slider":
-      return defaultSlider(o);
-    case "margins":
-      return defaultMargins();
-    case "number":
-      return o.name.toLowerCase().includes("range") ? "" : "24";
-    case "color":
-      return isPaletteField(o)
-        ? {
-            ...DEFAULT_COLOR_MODE,
-            gradientAxis: defaultGradientAxisForVisual(visualId ?? "vertical-bar"),
-            stops: DEFAULT_COLOR_MODE.stops.map((s) => ({ ...s })),
-          }
-        : "#3FA7A0";
-    case "colorList":
-      return defaultColorList(o);
-    case "colorPair":
-      return { stroke: "#3FA7A0", fill: "#3FA7A0" };
-    case "multi":
-      return defaultMulti(o);
-    case "repeatable":
-      if (isZoomScalingField(o)) return { ...DEFAULT_ZOOM_SCALING, stops: DEFAULT_ZOOM_SCALING.stops.map((s) => ({ ...s })) };
-      if (o.name === "Color thresholds" || o.name.toLowerCase().includes("status")) {
-        return [
-          { min: "", max: "", color: "#f87171", label: "At risk", opacity: 100 },
-          { min: "", max: "", color: "#fbbf24", label: "Watch", opacity: 100 },
-          { min: "", max: "", color: "#34d399", label: "On track", opacity: 100 },
-        ];
-      }
-      return DEFAULT_REPEATABLE.map((r) => ({ ...r }));
-    case "gradient":
-      return DEFAULT_GRADIENT.map((r) => ({ ...r }));
-    case "dropdown":
-      return o.values[0] ?? "";
-    case "field":
-      return "";
-    case "text":
-    default:
-      return "";
-  }
-}
-
-/* slider display value derived from the option's range description */
-function sliderScale(o: Opt): { lo: number; hi: number; ticks: number; step: number; unit: string } {
-  const desc = o.desc ?? "";
-  const range = desc.match(/(-?\d*\.?\d+)\s*[–—-]\s*(-?\d*\.?\d+)/);
-  const stepMatch = desc.match(/step\s+(-?\d*\.?\d+)/i);
-  const lo = range ? parseFloat(range[1]) : 0;
-  const hi = range ? parseFloat(range[2]) : 100;
-  const span = hi - lo;
-  let unit = "";
-  if (/%/.test(desc)) unit = "%";
-  else if (/\bpx\b/i.test(desc)) unit = "px";
-  else if (desc.includes("°")) unit = "°";
-  else if (/\(m\)/i.test(o.name) || /\bm\b/i.test(desc)) unit = "m";
-
-  let step = stepMatch ? parseFloat(stepMatch[1]) : 0;
-  /* 0–1 ranges are continuous (opacity/ratio), not a 2-stop toggle. */
-  if (!step && Number.isInteger(lo) && Number.isInteger(hi) && span > 1 && span <= 12) step = 1;
-  const ticks = step > 0 && span > 0 ? Math.round(span / step) + 1 : 0;
-  return { lo, hi, ticks: ticks >= 2 && ticks <= 12 ? ticks : 0, step, unit };
-}
-
-function sliderValue(o: Opt, pct: number): number {
-  const { lo, hi, ticks, step } = sliderScale(o);
-  const t = Math.max(0, Math.min(100, pct)) / 100;
-  if (ticks >= 2) {
-    const idx = Math.round(t * (ticks - 1));
-    return lo + (idx / (ticks - 1)) * (hi - lo);
-  }
-  const raw = lo + t * (hi - lo);
-  return step > 0 ? Math.min(hi, lo + Math.round((raw - lo) / step) * step) : raw;
-}
-
-function sliderDisplay(o: Opt, pct: number) {
-  const { lo, hi, ticks, step, unit } = sliderScale(o);
-  const val = sliderValue(o, pct);
-  const stepDecimals = step > 0 && step < 1 ? Math.min(2, String(step).split(".")[1]?.length ?? 0) : 0;
-  const decimals = hi <= 1 ? 2 : stepDecimals || (ticks && (hi - lo) / (ticks - 1) < 1 ? 1 : 0);
-  const formatted = decimals === 0 ? String(Math.round(val)) : val.toFixed(decimals);
-  if (!unit) return formatted;
-  return unit === "°" || unit === "%" ? `${formatted}${unit}` : `${formatted} ${unit}`;
-}
-
 /* ---------- low-level interactive primitives ---------- */
-function Switch({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
+function Switch({ value, onChange, label }: { value: boolean; onChange: (v: boolean) => void; label: string }) {
   return (
     <span
       role="switch"
+      tabIndex={0}
       aria-checked={value}
+      aria-label={label}
       className={"ia-mini-switch" + (value ? " on" : "")}
       onClick={() => onChange(!value)}
+      onKeyDown={(event) => {
+        if (event.key === " " || event.key === "Enter") {
+          event.preventDefault();
+          onChange(!value);
+        }
+      }}
     />
   );
 }
@@ -994,6 +800,7 @@ function Control({
   setVal: (o: Opt, v: unknown) => void;
   multiOptionExtra?: { after: string; content: ReactNode };
 }) {
+  const fieldOptions = useContext(FieldOptionsContext);
   if (o.group === "Marker Shape" && o.name === "Icons") {
     return (
       <PhosphorIconPicker
@@ -1279,7 +1086,7 @@ function Control({
                 <div className="ia-toggle-flat">
                   <div className="ia-toggle-line">
                     <strong>{v}</strong>
-                    <Switch value={selected.includes(v)} onChange={() => toggle(v)} />
+                    <Switch value={selected.includes(v)} onChange={() => toggle(v)} label={v} />
                   </div>
                 </div>
                 {multiOptionExtra?.after === v && multiOptionExtra.content}
@@ -1446,7 +1253,7 @@ function Control({
     case "dropdown":
     case "field":
     default: {
-      const options = o.type === "field" ? fieldOptionsFor(o.name) : o.values.map((v) => ({ value: v, label: v }));
+      const options = o.type === "field" ? fieldOptions(o.name) : o.values.map((v) => ({ value: v, label: v }));
       const list = options.length ? options : [{ value: `Set ${o.name}`, label: `Set ${o.name}` }];
       return (
         <Dropdown
@@ -1463,7 +1270,7 @@ function Control({
 }
 
 /* ---------- field block (name + level icon + control) ---------- */
-function FieldBlock({
+export function FieldBlock({
   o,
   getVal,
   setVal,
@@ -1489,7 +1296,7 @@ function FieldBlock({
             <strong>{o.name}</strong>
             <FieldInfoTip desc={o.desc} />
           </div>
-          <Switch value={Boolean(getVal(o))} onChange={(v) => setVal(o, v)} />
+          <Switch value={Boolean(getVal(o))} onChange={(v) => setVal(o, v)} label={o.name} />
         </div>
       </div>
     );
@@ -2841,7 +2648,7 @@ function flagConditionSummary(condition: FlagSettingsValue["conditions"][number]
     .join(" ");
 }
 
-function FlagsSettings({
+export function FlagsSettings({
   items,
   getVal,
   setVal,
@@ -2941,7 +2748,7 @@ function FlagsSettings({
   );
 }
 
-function GroupCard({
+export function GroupCard({
   items,
   advancedOpen,
   getVal,
@@ -3392,19 +3199,7 @@ export default function EditComponentModal({
     };
   }, [devMenuOpen]);
 
-  const getVal = (o: Opt) => {
-    const currentKey = keyOf(o);
-    const legacyKey = LEGACY_SETTING_KEYS[currentKey];
-    const v = config[currentKey] ?? (legacyKey !== undefined ? config[legacyKey] : undefined);
-    if (o.type === "field" && o.level === "required" && !isValueFilled(o, v)) {
-      return defaultFor(o, displayVisualId);
-    }
-    const modeDefault = waterSurfaceModeDefault(displayVisualId, config["Surface Style::Mode"], o);
-    if (v === undefined || (o.group === "Color" && o.name === "Palette" && isUntouchedPlumePalette(v))) {
-      return modeDefault !== undefined ? modeDefault : defaultFor(o, displayVisualId);
-    }
-    return v;
-  };
+  const getVal = (o: Opt) => resolveFieldValue(o, config, displayVisualId);
   const setVal = (o: Opt, v: unknown) => setConfig((c) => ({ ...c, [keyOf(o)]: v }));
 
   const cfg = (group: string, name: string, fallback: unknown) => {
@@ -3489,19 +3284,10 @@ export default function EditComponentModal({
 
   const mappingFields = visualFields.filter((o) => o.group === "Mapping");
 
-  const resolvedConfig = useMemo(() => {
-    const next: Config = { ...config };
-    for (const o of visualFields) {
-      const k = keyOf(o);
-      if (
-        next[k] === undefined ||
-        (o.type === "field" && o.level === "required" && !isValueFilled(o, next[k]))
-      ) {
-        next[k] = defaultFor(o, displayVisualId);
-      }
-    }
-    return next;
-  }, [config, visualFields, displayVisualId]);
+  const resolvedConfig = useMemo(
+    () => resolveConfigDefaults(visualFields, config, displayVisualId),
+    [config, visualFields, displayVisualId],
+  );
 
   const previewSeries = useMemo(
     () =>
@@ -3728,6 +3514,28 @@ export default function EditComponentModal({
       window.removeEventListener("resize", updateStepGlow);
     };
   }, [updateStepGlow]);
+
+  const nativePreview = isNativeChart(displayVisualId);
+  const livePreview = nativePreview ? (
+    <BuilderChart
+      visualId={displayVisualId}
+      config={config}
+      title={generalInfo.name || undefined}
+      description={generalInfo.description || undefined}
+      insight={generalInfo.insight || undefined}
+      showActions={!(isDeepDiveStep && deepDiveHasTabs)}
+    />
+  ) : (
+    <ChartPreview
+      type={chart.preview}
+      chartId={activeChart}
+      visualId={displayVisualId}
+      cfg={cfg}
+      series={previewSeries}
+      chartTitle={generalInfo.name || undefined}
+      size={size}
+    />
+  );
 
   return (
     <div className="modal-overlay" role="dialog" aria-modal="true">
@@ -4178,16 +3986,8 @@ export default function EditComponentModal({
                       </div>
                     </div>
                     <div className="preview__chart-slot">
-                      <div className={"chart-card chart-card--" + size}>
-                        <ChartPreview
-                          type={chart.preview}
-                          chartId={activeChart}
-                          visualId={displayVisualId}
-                          cfg={cfg}
-                          series={previewSeries}
-                          chartTitle={generalInfo.name || undefined}
-                          size={size}
-                        />
+                      <div className={"chart-card chart-card--" + size + (nativePreview ? " chart-card--native" : "")}>
+                        {livePreview}
                       </div>
                     </div>
                   </div>
@@ -4326,6 +4126,7 @@ export default function EditComponentModal({
                         className={
                           "chart-card chart-card--" +
                           size +
+                          (nativePreview ? " chart-card--native" : "") +
                           (isDeepDiveStep && deepDiveHasTabs
                             ? " chart-card--deep-dive-preview"
                             : "")
@@ -4337,7 +4138,10 @@ export default function EditComponentModal({
                             ? "Open Deep Dive preview"
                             : undefined
                         }
-                        onClick={() => {
+                        onClick={(event) => {
+                          if ((event.target as HTMLElement).closest("button")) {
+                            return;
+                          }
                           if (isDeepDiveStep && deepDiveHasTabs) {
                             setDeepDivePreviewOpen(true);
                           }
@@ -4369,15 +4173,7 @@ export default function EditComponentModal({
                             <Info size={14} weight="regular" aria-hidden="true" />
                           </button>
                         )}
-                        <ChartPreview
-                          type={chart.preview}
-                          chartId={activeChart}
-                          visualId={displayVisualId}
-                          cfg={cfg}
-                          series={previewSeries}
-                          chartTitle={generalInfo.name || undefined}
-                          size={size}
-                        />
+                        {livePreview}
                       </div>
                     </div>
                   </div>

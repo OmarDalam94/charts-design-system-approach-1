@@ -1,0 +1,132 @@
+{
+  "env": {
+    "date": "2026-10-06T08:25:24.224Z",
+    "browser": "Chromium 153.0.8010.12 (headless)",
+    "os": "Darwin 25.6.0 arm64",
+    "cpu": "Apple M4 × 10",
+    "memoryGb": 16,
+    "build": "Vite dev server (unminified React development build)"
+  },
+  "results": [
+    {
+      "id": "line-50x720",
+      "visualId": "line-chart",
+      "variant": "dense",
+      "series": 50,
+      "width": 1024,
+      "height": 420,
+      "rows": 36000,
+      "svgNodes": 162,
+      "firstRenderMs": 430.1,
+      "resizeMsMedian": 125.1,
+      "resizeMsP95": 133.4,
+      "hoverMsMedian": 58.7,
+      "hoverMsP95": 115.3,
+      "adaptations": [
+        "Palette: requested Single → effective Categorical per series. Single color applies to one series; 50 series use the categorical palette so each stays distinguishable."
+      ]
+    },
+    {
+      "id": "line-5x720",
+      "visualId": "line-chart",
+      "variant": "dense",
+      "series": 5,
+      "width": 640,
+      "height": 360,
+      "rows": 3600,
+      "svgNodes": 69,
+      "firstRenderMs": 62.2,
+      "resizeMsMedian": 33.3,
+      "resizeMsP95": 47,
+      "hoverMsMedian": 33.3,
+      "hoverMsP95": 34.3,
+      "adaptations": [
+        "Palette: requested Single → effective Categorical per series. Single color applies to one series; 5 series use the categorical palette so each stays distinguishable.",
+        "3 X tick labels are hidden where labels would overlap; ticks and values stay in the tooltip and data view."
+      ]
+    },
+    {
+      "id": "area-stacked-12x720",
+      "visualId": "area-chart",
+      "variant": "dense",
+      "series": 12,
+      "width": 1024,
+      "height": 420,
+      "rows": 8640,
+      "svgNodes": 98,
+      "firstRenderMs": 127.2,
+      "resizeMsMedian": 50.5,
+      "resizeMsP95": 66.3,
+      "hoverMsMedian": 33.3,
+      "hoverMsP95": 42.7,
+      "adaptations": [
+        "Palette: requested Single → effective Categorical per series. Single color applies to one series; 12 series use the categorical palette so each stays distinguishable."
+      ]
+    },
+    {
+      "id": "scatter-5000",
+      "visualId": "scatter-plot",
+      "variant": "dense",
+      "width": 1024,
+      "height": 480,
+      "rows": 5000,
+      "svgNodes": 5064,
+      "firstRenderMs": 198.8,
+      "resizeMsMedian": 81.9,
+      "resizeMsP95": 95.2,
+      "hoverMsMedian": 46.4,
+      "hoverMsP95": 51.7,
+      "adaptations": []
+    },
+    {
+      "id": "bar-60",
+      "visualId": "vertical-bar",
+      "variant": "dense",
+      "width": 1024,
+      "height": 420,
+      "rows": 60,
+      "svgNodes": 122,
+      "firstRenderMs": 10.9,
+      "resizeMsMedian": 33.9,
+      "resizeMsP95": 45.1,
+      "hoverMsMedian": 33.4,
+      "hoverMsP95": 34.1,
+      "adaptations": [
+        "Every 5th category label is shown so labels do not overlap; all categories stay in the tooltip and data view."
+      ]
+    },
+    {
+      "id": "availability-2000",
+      "visualId": "availability",
+      "variant": "dense",
+      "width": 1024,
+      "height": 240,
+      "rows": 2000,
+      "svgNodes": 56,
+      "firstRenderMs": 10,
+      "resizeMsMedian": 33.3,
+      "resizeMsP95": 45.7,
+      "hoverMsMedian": 33.4,
+      "hoverMsP95": 34,
+      "adaptations": [
+        "Segments are ordered by Hour, the data source's time column.",
+        "Segment count: requested 48 → effective 48 segments × ~42 rows. There are more rows than segments; each segment shows the worst state among its rows."
+      ]
+    },
+    {
+      "id": "table-400",
+      "visualId": "table",
+      "variant": "dense",
+      "width": 1024,
+      "height": 480,
+      "rows": 400,
+      "svgNodes": 4,
+      "firstRenderMs": 34.1,
+      "resizeMsMedian": 33.3,
+      "resizeMsP95": 44.2,
+      "hoverMsMedian": null,
+      "hoverMsP95": null,
+      "adaptations": []
+    }
+  ]
+}

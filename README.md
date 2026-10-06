@@ -18,12 +18,25 @@ npm run build   # production build
 npm run preview # preview the production build
 ```
 
+## Chart system and Chart System Lab
+
+Chart previews are drawn by the Llumen chart system in `src/charts/`. The **Chart System Lab** (left nav, or `npm run lab`, route `#/chart-lab`) documents and tests every chart asset with live controls, scenarios, behavior rules, data editing and property coverage. The Lab and the Edit Asset preview use the same renderer.
+
+```bash
+npm run lab              # open the Lab
+npm test                 # unit tests
+npm run test:e2e         # browser tests (run `npx playwright install chromium` once)
+npm run coverage:report  # regenerate coverage and behavior docs
+```
+
+Documentation, run guide, decisions and status: [docs/chart-system/](docs/chart-system/README.md).
+
 ## Tech stack
 
 | Layer | Choice |
 |-------|--------|
 | UI | React 18 + TypeScript |
-| Build | Vite 5 |
+| Build | Vite 6 |
 | Styling | CSS custom properties (Llumen tokens) — no CSS-in-JS |
 | Icons | `@phosphor-icons/react` + inline SVG glyphs |
 | Fonts | Innovator Grotesk (self-hosted), IBM Plex Mono (Google Fonts) |

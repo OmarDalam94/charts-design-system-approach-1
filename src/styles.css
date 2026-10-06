@@ -242,6 +242,10 @@ button {
   margin-bottom: 2px;
   transition: 0.15s;
 }
+a.nav-item {
+  box-sizing: border-box;
+  text-decoration: none;
+}
 .nav-item:hover {
   background: rgba(255, 255, 255, 0.04);
   color: var(--text);
@@ -4345,6 +4349,16 @@ button {
   width: 380px;
   height: 384px;
 }
+/* Llumen chart system cards draw their own padding and anatomy; the builder card keeps border, radius and shadow. */
+.chart-card--native {
+  padding: 0;
+  overflow: hidden;
+}
+.chart-card--native .lc-chart {
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+}
 
 /* ---------- Footer (full modal width) ---------- */
 .settings__footer {
@@ -4579,6 +4593,11 @@ button {
 .ia-mini-switch:hover {
   background-image: linear-gradient(var(--lc-bg-default-hover), var(--lc-bg-default-hover));
   border-color: var(--lc-border-control-hover);
+}
+.ia-mini-switch:focus-visible {
+  outline: none;
+  border-color: var(--lc-border-control-focus);
+  box-shadow: var(--lc-shadow-control-focus);
 }
 .ia-mini-switch::after {
   content: "";
